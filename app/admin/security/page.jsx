@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Shield, Edit, Trash2, X, Loader2, Search } from "lucide-react";
+import { Plus, Shield, Edit, Trash2, X, Loader2, Search, Eye, EyeOff, User, Lock } from "lucide-react";
 import { toast, Toaster } from "react-hot-toast";
 
 export default function SecuritiesPage() {
@@ -11,9 +11,13 @@ export default function SecuritiesPage() {
   const [editingSecurity, setEditingSecurity] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  
   const [formData, setFormData] = useState({
     name: "",
     mobileNumber: "",
+    username: "",
+    password: "",
     shiftTiming: "",
     photoUrl: "",
   });
@@ -45,10 +49,13 @@ export default function SecuritiesPage() {
     setFormData({
       name: "",
       mobileNumber: "",
+      username: "",
+      password: "",
       shiftTiming: "",
       photoUrl: "",
     });
     setEditingSecurity(null);
+    setShowPassword(false);
   };
 
   const handleSubmit = async (e) => {
@@ -59,10 +66,17 @@ export default function SecuritiesPage() {
         ? `/api/securities/${editingSecurity.id}`
         : "/api/securities";
       const method = editingSecurity ? "PUT" : "POST";
+      
+      // For editing, only send password if it's been changed
+      const payload = { ...formData };
+      if (editingSecurity && !formData.password) {
+        delete payload.password;
+      }
+      
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (res.ok) {
@@ -89,6 +103,8 @@ export default function SecuritiesPage() {
     setFormData({
       name: security.name,
       mobileNumber: security.mobileNumber,
+      username: security.username,
+      password: "", // Don't populate password for security
       shiftTiming: security.shiftTiming || "",
       photoUrl: security.photoUrl || "",
     });
@@ -111,7 +127,7 @@ export default function SecuritiesPage() {
   };
 
   const filteredSecurities = securities.filter((s) =>
-    [s.name, s.mobileNumber, s.shiftTiming]
+    [s.name, s.mobileNumber, s.username, s.shiftTiming]
       .join(" ")
       .toLowerCase()
       .includes(searchQuery.toLowerCase())
@@ -120,7 +136,8 @@ export default function SecuritiesPage() {
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <Toaster position="top-right" />
-      {/* Header and add button */}
+      
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Security Staff</h1>
@@ -141,6 +158,7 @@ export default function SecuritiesPage() {
           Add Security
         </motion.button>
       </div>
+
       {/* Search bar */}
       <div className="mb-6">
         <div className="relative">
@@ -154,6 +172,7 @@ export default function SecuritiesPage() {
           />
         </div>
       </div>
+
       {/* Staff Grid */}
       {loading ? (
         <div className="flex justify-center py-12">
@@ -183,8 +202,16 @@ export default function SecuritiesPage() {
                   </h3>
                   <Shield className="w-5 h-5 text-blue-600" />
                 </div>
-                <p className="text-sm text-slate-600">{sec.mobileNumber}</p>
-                <p className="text-sm text-slate-600">{sec.shiftTiming}</p>
+                <div className="space-y-1">
+                  <p className="text-sm text-slate-600 flex items-center gap-2">
+                    <User className="w-4 h-4" />
+                    {sec.username}
+                  </p>
+                  <p className="text-sm text-slate-600">{sec.mobileNumber}</p>
+                  {sec.shiftTiming && (
+                    <p className="text-sm text-slate-600">{sec.shiftTiming}</p>
+                  )}
+                </div>
                 {sec.photoUrl && (
                   <img
                     src={sec.photoUrl}
@@ -211,6 +238,7 @@ export default function SecuritiesPage() {
           ))}
         </div>
       )}
+
       {/* Modal */}
       <AnimatePresence>
         {showModal && (
@@ -223,14 +251,15 @@ export default function SecuritiesPage() {
               onClick={() => setShowModal(false)}
               className="fixed inset-0 bg-slate-900/50 z-40"
             />
+            
             {/* Modal Content */}
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="fixed inset-4 sm:inset-auto sm:top-12 sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-lg bg-white rounded-2xl shadow-2xl z-50"
+              className="fixed inset-4 sm:inset-auto sm:top-12 sm:left-1/2 sm:-translate-x-1/2 sm:w-full sm:max-w-lg bg-white rounded-2xl shadow-2xl z-50 max-h-[90vh] overflow-y-auto"
             >
-              <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+              <div className="p-6 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white z-10">
                 <h2 className="text-2xl font-bold">
                   {editingSecurity ? "Edit Security Staff" : "Add Security Staff"}
                 </h2>
@@ -241,46 +270,138 @@ export default function SecuritiesPage() {
                   <X className="w-5 h-5" />
                 </button>
               </div>
+              
               <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  required
-                  placeholder="Name"
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg"
-                />
-                <input
-                  type="text"
-                  name="mobileNumber"
-                  value={formData.mobileNumber}
-                  onChange={handleInputChange}
-                  required
-                  placeholder="Mobile Number"
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg"
-                />
-                <input
-                  type="text"
-                  name="shiftTiming"
-                  value={formData.shiftTiming}
-                  onChange={handleInputChange}
-                  placeholder="Shift Timing"
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg"
-                />
-                <input
-                  type="url"
-                  name="photoUrl"
-                  value={formData.photoUrl}
-                  onChange={handleInputChange}
-                  placeholder="Photo URL"
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg"
-                />
+                {/* Name */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Full Name *
+                  </label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    required
+                    placeholder="Enter full name"
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* Mobile Number */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Mobile Number *
+                  </label>
+                  <input
+                    type="text"
+                    name="mobileNumber"
+                    value={formData.mobileNumber}
+                    onChange={handleInputChange}
+                    required
+                    placeholder="Enter mobile number"
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* Divider */}
+                <div className="border-t border-slate-200 my-4"></div>
+                <p className="text-sm font-semibold text-slate-700 -mb-2">Login Credentials</p>
+
+                {/* Username */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Username * <span className="text-xs text-slate-500">(3-20 characters, letters, numbers, underscore)</span>
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                    <input
+                      type="text"
+                      name="username"
+                      value={formData.username}
+                      onChange={handleInputChange}
+                      required
+                      placeholder="Enter username"
+                      pattern="[a-zA-Z0-9_]{3,20}"
+                      className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Password */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Password {editingSecurity ? "(leave blank to keep current)" : "*"}
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      name="password"
+                      value={formData.password}
+                      onChange={handleInputChange}
+                      required={!editingSecurity}
+                      placeholder={editingSecurity ? "Enter new password (optional)" : "Enter password"}
+                      minLength="6"
+                      className="w-full pl-10 pr-12 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="w-5 h-5" />
+                      ) : (
+                        <Eye className="w-5 h-5" />
+                      )}
+                    </button>
+                  </div>
+                  {!editingSecurity && (
+                    <p className="text-xs text-slate-500 mt-1">Minimum 6 characters</p>
+                  )}
+                </div>
+
+                {/* Divider */}
+                <div className="border-t border-slate-200 my-4"></div>
+                <p className="text-sm font-semibold text-slate-700 -mb-2">Additional Details</p>
+
+                {/* Shift Timing */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Shift Timing
+                  </label>
+                  <input
+                    type="text"
+                    name="shiftTiming"
+                    value={formData.shiftTiming}
+                    onChange={handleInputChange}
+                    placeholder="e.g., 9:00 AM - 6:00 PM"
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* Photo URL */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Photo URL
+                  </label>
+                  <input
+                    type="url"
+                    name="photoUrl"
+                    value={formData.photoUrl}
+                    onChange={handleInputChange}
+                    placeholder="https://example.com/photo.jpg"
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* Buttons */}
                 <div className="flex gap-2 pt-4">
                   <button
                     type="button"
                     onClick={() => setShowModal(false)}
-                    className="flex-1 border border-slate-300 rounded-lg py-2"
+                    className="flex-1 border border-slate-300 rounded-lg py-2 hover:bg-slate-50 transition"
                   >
                     Cancel
                   </button>
