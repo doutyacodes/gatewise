@@ -1,5 +1,6 @@
 // ============================================
 // FILE: components/admin/Sidebar.jsx
+// Updated with Apartment Requests menu item
 // ============================================
 'use client';
 
@@ -14,6 +15,7 @@ import {
   UserCheck,
   Home,
   ClipboardList,
+  FileCheck,
 } from 'lucide-react';
 
 export default function Sidebar({ user, isOpen, onClose }) {
@@ -29,6 +31,7 @@ export default function Sidebar({ user, isOpen, onClose }) {
   const adminMenuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', href: '/admin/dashboard' },
     { icon: Home, label: 'Apartments', href: '/admin/apartments' },
+    { icon: FileCheck, label: 'Apartment Requests', href: '/admin/apartment-requests' },
     // { icon: Users, label: 'Residents', href: '/admin/residents' },
     // { icon: UserCheck, label: 'Visitors', href: '/admin/visitors' },
     { icon: Shield, label: 'Security', href: '/admin/security' },
@@ -77,7 +80,7 @@ export default function Sidebar({ user, isOpen, onClose }) {
           <nav className="flex-1 overflow-y-auto p-4">
             <ul className="space-y-1">
               {menuItems.map((item) => {
-                const isActive = pathname === item.href;
+                const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
                 return (
                   <li key={item.href}>
                     <Link
