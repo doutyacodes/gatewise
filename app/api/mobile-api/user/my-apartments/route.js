@@ -1,6 +1,6 @@
 // ============================================
 // FILE: app/api/mobile-api/user/my-apartments/route.js
-// Get user's apartments (owned and rented)
+// Get user's apartments (owned and rented) - UPDATED with Bearer token
 // ============================================
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
@@ -9,33 +9,39 @@ import {
   apartments,
   communities,
 } from "@/lib/db/schema";
-import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
 import { eq } from "drizzle-orm";
+import { jwtVerify } from "jose";
 
-export async function GET() {
+const encoder = new TextEncoder();
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
+
+async function verifyMobileToken(token) {
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("auth-token")?.value;
+    const { payload } = await jwtVerify(token, encoder.encode(JWT_SECRET));
+    return payload;
+  } catch (error) {
+    return null;
+  }
+}
 
-    if (!token) {
+export async function GET(request) {
+  try {
+    // Verify authentication
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "Unauthorized - Please login",
-        },
+        { success: false, error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    const user = await verifyToken(token);
-    if (!user || user.type !== "user") {
+    const token = authHeader.substring(7);
+    const user = await verifyMobileToken(token);
+
+    if (!user || user.type !== 'user') {
       return NextResponse.json(
-        {
-          success: false,
-          error: "Only users can view their apartments",
-        },
-        { status: 403 }
+        { success: false, error: 'Invalid authentication' },
+        { status: 401 }
       );
     }
 

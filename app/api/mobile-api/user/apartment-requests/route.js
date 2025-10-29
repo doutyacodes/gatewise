@@ -1,6 +1,6 @@
 // ============================================
 // FILE: app/api/mobile-api/user/apartment-requests/route.js
-// Create apartment request with members and rule responses
+// Create apartment request - UPDATED with Bearer token
 // ============================================
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
@@ -8,28 +8,36 @@ import {
   apartmentRequests,
   apartmentRequestMembers,
   apartmentRequestRuleResponses,
-  members,
 } from "@/lib/db/schema";
-import { cookies } from "next/headers";
-import { verifyToken } from "@/lib/auth";
+import { jwtVerify } from "jose";
+
+const encoder = new TextEncoder();
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
+
+async function verifyMobileToken(token) {
+  try {
+    const { payload } = await jwtVerify(token, encoder.encode(JWT_SECRET));
+    return payload;
+  } catch (error) {
+    return null;
+  }
+}
 
 export async function POST(request) {
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("auth-token")?.value;
-
-    if (!token) {
+    // Verify authentication
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "Unauthorized - Please login",
-        },
+        { success: false, error: 'Unauthorized - Please login' },
         { status: 401 }
       );
     }
 
-    const user = await verifyToken(token);
-    if (!user || user.type !== "user") {
+    const token = authHeader.substring(7);
+    const user = await verifyMobileToken(token);
+
+    if (!user || user.type !== 'user') {
       return NextResponse.json(
         {
           success: false,
@@ -85,7 +93,7 @@ export async function POST(request) {
     }
 
     // Create apartment request
-    const [request] = await db
+    const [newRequest] = await db
       .insert(apartmentRequests)
       .values({
         userId: user.id,
@@ -99,14 +107,14 @@ export async function POST(request) {
       })
       .$returningId();
 
-    console.log("✅ Apartment request created:", request.id);
+    console.log("✅ Apartment request created:", newRequest.id);
 
     // Insert members if provided
     if (requestMembers && Array.isArray(requestMembers) && requestMembers.length > 0) {
       const memberValues = requestMembers
         .filter((member) => member.name && member.name.trim())
         .map((member) => ({
-          requestId: request.id,
+          requestId: newRequest.id,
           name: member.name.trim(),
           mobileNumber: member.mobileNumber?.trim() || null,
           relation: member.relation?.trim() || null,
@@ -124,7 +132,7 @@ export async function POST(request) {
       const responseValues = ruleResponses
         .filter((response) => response.ruleId)
         .map((response) => ({
-          requestId: request.id,
+          requestId: newRequest.id,
           ruleId: Number(response.ruleId),
           textResponse: response.textResponse || null,
           imageFilename: response.imageFilename || null,
@@ -143,7 +151,7 @@ export async function POST(request) {
         success: true,
         message: "Apartment request submitted successfully",
         data: {
-          requestId: request.id,
+          requestId: newRequest.id,
         },
       },
       { status: 201 }
