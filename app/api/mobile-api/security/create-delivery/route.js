@@ -1,6 +1,6 @@
 // ============================================
 // FILE: app/api/mobile-api/security/create-delivery/route.js
-// Create Delivery Log Entry with PHP Photo
+// Create Delivery Log - Updated with New Fields
 // ============================================
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
@@ -11,7 +11,6 @@ import { jwtVerify } from "jose";
 const encoder = new TextEncoder();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
 
-// Verify JWT token
 async function verifyMobileToken(token) {
   try {
     const { payload } = await jwtVerify(token, encoder.encode(JWT_SECRET));
@@ -47,20 +46,19 @@ export async function POST(request) {
     const {
       deliveryPersonName,
       companyName,
+      companyLogo,
+      vehicleNumber,
       purpose,
-      photoPath, // filename from PHP upload (e.g., "guest_12345.jpg")
+      photoFilename, // filename from PHP upload
     } = body;
 
     // Validate required fields
-    if (!deliveryPersonName || !companyName || !photoPath) {
+    if (!deliveryPersonName || !companyName || !photoFilename) {
       return NextResponse.json(
-        { success: false, error: 'Delivery person name, company name, and photo are required' },
+        { success: false, error: 'Delivery person name, company, and photo are required' },
         { status: 400 }
       );
     }
-
-    // Build full photo URL
-    const photoUrl = `https://wowfy.in/gatewise/guest_images/${photoPath}`;
 
     // Get current timestamp
     const now = new Date();
@@ -71,10 +69,12 @@ export async function POST(request) {
       securityId: security.id,
       deliveryPersonName: deliveryPersonName.trim(),
       companyName: companyName.trim(),
-      photoUrl: photoUrl,
+      companyLogo: companyLogo || 'courier.png', // Default to courier
+      vehicleNumber: vehicleNumber?.trim().toUpperCase() || null,
+      photoFilename: photoFilename,
       purpose: purpose?.trim() || null,
       entryTime: now,
-      exitTime: null, // Will be updated when delivery person exits
+      exitTime: null,
       createdAt: now,
     });
 
@@ -87,7 +87,6 @@ export async function POST(request) {
       data: {
         deliveryId: deliveryId,
         entryTime: now.toISOString(),
-        photoUrl: photoUrl,
       },
     });
 
@@ -125,12 +124,12 @@ export async function GET(request) {
       );
     }
 
-    // Get query parameters for pagination
+    // Get query parameters
     const url = new URL(request.url);
     const limit = parseInt(url.searchParams.get('limit') || '50');
     const offset = parseInt(url.searchParams.get('offset') || '0');
 
-    // Fetch delivery logs
+    // Fetch delivery logs with photo URLs
     const logs = await db
       .select()
       .from(deliveryLogs)
@@ -139,10 +138,17 @@ export async function GET(request) {
       .limit(limit)
       .offset(offset);
 
+    // Add full photo URLs
+    const PHOTO_BASE_URL = 'https://wowfy.in/gatewise/guest_images/';
+    const logsWithUrls = logs.map(log => ({
+      ...log,
+      photoUrl: log.photoFilename ? `${PHOTO_BASE_URL}${log.photoFilename}` : null,
+    }));
+
     return NextResponse.json({
       success: true,
       data: {
-        logs: logs,
+        logs: logsWithUrls,
         limit: limit,
         offset: offset,
       },
