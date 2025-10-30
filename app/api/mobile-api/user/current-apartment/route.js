@@ -4,11 +4,11 @@
 // Returns user's currently selected apartment with all apartments they have access to
 // ============================================
 
+import { verifyToken } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { apartmentOwnerships, apartments, communities, userApartmentContext } from '@/lib/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
-import { verifyToken } from '@/lib/auth';
 
 export async function GET(request) {
   try {

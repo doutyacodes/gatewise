@@ -4,12 +4,12 @@
 // Creates a new guest and generates encrypted QR code
 // ============================================
 
+import { verifyToken } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { guests, userApartmentContext } from '@/lib/db/schema';
+import { guests } from '@/lib/db/schema';
+import crypto from 'crypto';
 import { eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
-import { verifyToken } from '@/lib/auth';
-import crypto from 'crypto';
 
 // QR Encryption (Server-side - use same key as client)
 const SECRET_KEY = 'GateWise2025SecureQRCodeEncryptionKey!@#$%';
