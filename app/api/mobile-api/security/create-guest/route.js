@@ -155,12 +155,14 @@ export async function POST(request) {
       // Notification data for deep linking
       const notificationData = {
         type: 'guest_arrival',
-        screen: 'security/guest-waiting',
+        screen: 'user/guest-approval',
         guestId: guestId.toString(),
         guestName: guestName,
         apartmentId: apartmentId.toString(),
         apartmentNumber: residentData.apartmentNumber,
         qrCode: qrCode,
+        vehicleNumber: vehicleNumber || '',
+        photoFilename: photoFilename,
         timestamp: now.toISOString(),
       };
 

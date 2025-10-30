@@ -1,12 +1,13 @@
 // ============================================
 // FILE: app/api/mobile-api/security/create-delivery/route.js
-// Create Delivery Log - Updated with New Fields
+// Create Delivery Log - Updated with New Fields & Notifications
 // ============================================
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { deliveryLogs } from "@/lib/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { deliveryLogs, apartmentOwnerships, users, apartments } from "@/lib/db/schema";
+import { eq, desc, and } from "drizzle-orm";
 import { jwtVerify } from "jose";
+import { sendFCMNotification } from "../../helpers/fcmHelper";
 
 const encoder = new TextEncoder();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
@@ -50,12 +51,20 @@ export async function POST(request) {
       vehicleNumber,
       purpose,
       photoFilename, // filename from PHP upload
+      apartmentId, // NEW: apartment ID for notification
     } = body;
 
     // Validate required fields
     if (!deliveryPersonName || !companyName || !photoFilename) {
       return NextResponse.json(
         { success: false, error: 'Delivery person name, company, and photo are required' },
+        { status: 400 }
+      );
+    }
+
+    if (!apartmentId) {
+      return NextResponse.json(
+        { success: false, error: 'Apartment ID is required' },
         { status: 400 }
       );
     }
@@ -76,9 +85,91 @@ export async function POST(request) {
       entryTime: now,
       exitTime: null,
       createdAt: now,
+      apartmentId: apartmentId, // Store apartment ID
+      approvalStatus: 'pending', // Set initial status
     });
 
     const deliveryId = result[0].insertId;
+
+    // ==============================
+    // SEND NOTIFICATION TO RESIDENT
+    // ==============================
+    let notificationSent = false;
+
+    try {
+      // Find apartment owner
+      const residentQuery = await db
+        .select({
+          userId: apartmentOwnerships.userId,
+          isApproved: apartmentOwnerships.isAdminApproved,
+          userName: users.name,
+          userFcmToken: users.fcmToken,
+          userExpoPushToken: users.expoPushToken,
+          apartmentNumber: apartments.apartmentNumber,
+          towerName: apartments.towerName,
+        })
+        .from(apartmentOwnerships)
+        .leftJoin(users, eq(apartmentOwnerships.userId, users.id))
+        .leftJoin(apartments, eq(apartmentOwnerships.apartmentId, apartments.id))
+        .where(
+          and(
+            eq(apartmentOwnerships.apartmentId, apartmentId),
+            eq(apartmentOwnerships.isAdminApproved, true)
+          )
+        )
+        .limit(1);
+
+      if (residentQuery.length > 0) {
+        const residentData = residentQuery[0];
+        const apartmentDisplay = residentData.towerName
+          ? `${residentData.towerName} - ${residentData.apartmentNumber}`
+          : residentData.apartmentNumber;
+
+        console.log(`📱 Sending delivery notification to user: ${residentData.userName}`);
+
+        // Prepare notification data
+        const notificationTitle = '📦 New Delivery';
+        const notificationBody = `Delivery from ${companyName} for ${apartmentDisplay}`;
+        const notificationData = {
+          type: 'delivery_arrival',
+          screen: 'user/delivery-approval',
+          deliveryId: deliveryId.toString(),
+          companyName: companyName,
+          deliveryPersonName: deliveryPersonName,
+          apartmentNumber: residentData.apartmentNumber,
+          apartmentId: apartmentId.toString(),
+          vehicleNumber: vehicleNumber || '',
+          photoFilename: photoFilename,
+          companyLogo: companyLogo || 'courier.png',
+          timestamp: now.toISOString(),
+        };
+
+        // Send notification
+        if (residentData.userFcmToken || residentData.userExpoPushToken) {
+          const notificationResult = await sendFCMNotification({
+            fcmToken: residentData.userFcmToken,
+            title: notificationTitle,
+            body: notificationBody,
+            data: notificationData,
+            channelId: 'delivery',
+          });
+
+          if (notificationResult.success) {
+            notificationSent = true;
+            console.log('✅ Delivery notification sent successfully');
+          } else {
+            console.error('❌ Failed to send delivery notification:', notificationResult.error);
+          }
+        } else {
+          console.log('⚠️ No FCM or Expo token found for resident');
+        }
+      } else {
+        console.log('⚠️ No approved resident found for apartment ID:', apartmentId);
+      }
+    } catch (notifError) {
+      console.error('❌ Error sending delivery notification:', notifError);
+      // Continue execution even if notification fails
+    }
 
     // Return success
     return NextResponse.json({
@@ -87,6 +178,7 @@ export async function POST(request) {
       data: {
         deliveryId: deliveryId,
         entryTime: now.toISOString(),
+        notificationSent: notificationSent,
       },
     });
 
