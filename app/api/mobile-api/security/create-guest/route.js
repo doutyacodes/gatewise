@@ -2,11 +2,11 @@
 // FILE: app/api/mobile-api/security/create-guest/route.js
 // Create Guest Entry - Updated with New Fields & FCM Notifications
 // ============================================
-import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { guests, apartmentOwnerships, users, apartments } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { apartmentOwnerships, apartments, guests, users } from "@/lib/db/schema";
+import { and, eq } from "drizzle-orm";
 import { jwtVerify } from "jose";
+import { NextResponse } from "next/server";
 import { sendFCMNotification } from "../../helpers/fcmHelper";
 
 const encoder = new TextEncoder();
@@ -60,23 +60,23 @@ async function findResidentByApartmentId(apartmentId, communityId) {
 export async function POST(request) {
   try {
     // Verify authentication
-    // const authHeader = request.headers.get('Authorization');
-    // if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    //   return NextResponse.json(
-    //     { success: false, error: 'Unauthorized' },
-    //     { status: 401 }
-    //   );
-    // }
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
 
-    // const token = authHeader.substring(7);
-    // const security = await verifyMobileToken(token);
+    const token = authHeader.substring(7);
+    const security = await verifyMobileToken(token);
 
-    // if (!security || security.type !== 'security') {
-    //   return NextResponse.json(
-    //     { success: false, error: 'Invalid authentication' },
-    //     { status: 401 }
-    //   );
-    // }
+    if (!security || security.type !== 'security') {
+      return NextResponse.json(
+        { success: false, error: 'Invalid authentication' },
+        { status: 401 }
+      );
+    }
 
     // Parse request body
     const body = await request.json();
@@ -98,7 +98,7 @@ export async function POST(request) {
     }
 
     // Find resident user data
-    const residentData = await findResidentByApartmentId(apartmentId, 2);
+    const residentData = await findResidentByApartmentId(apartmentId, security.communityId);
 
     if (!residentData || !residentData.userId) {
       return NextResponse.json(
@@ -121,7 +121,7 @@ export async function POST(request) {
     // Insert guest entry
     const result = await db.insert(guests).values({
       createdByUserId: residentData.userId,
-      communityId: 2,
+      communityId: security.communityId,
       guestName: guestName.trim(),
       guestPhone: guestPhone?.trim() || null,
       guestType: 'one_time', // Always one_time as per requirement
