@@ -34,10 +34,11 @@ export default function ApartmentRequestsPage() {
   const fetchRequests = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/mobile-api/admin/apartment-requests?status=${activeTab}`);
+      const res = await fetch(`/api/admin/apartment-requests?status=${activeTab}`);
       if (res.ok) {
         const data = await res.json();
-        setRequests(data.data.requests || []);
+        console.log('Fetched requests:', data);
+        setRequests(data.requests || []);
       } else {
         toast.error('Failed to fetch requests');
       }
