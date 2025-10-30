@@ -68,15 +68,15 @@ export async function POST(request) {
     //   );
     // }
 
-    const token = authHeader.substring(7);
-    const security = await verifyMobileToken(token);
+    // const token = authHeader.substring(7);
+    // const security = await verifyMobileToken(token);
 
-    if (!security || security.type !== 'security') {
-      return NextResponse.json(
-        { success: false, error: 'Invalid authentication' },
-        { status: 401 }
-      );
-    }
+    // if (!security || security.type !== 'security') {
+    //   return NextResponse.json(
+    //     { success: false, error: 'Invalid authentication' },
+    //     { status: 401 }
+    //   );
+    // }
 
     // Parse request body
     const body = await request.json();
