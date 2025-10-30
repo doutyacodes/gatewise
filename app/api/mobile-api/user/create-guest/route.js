@@ -5,7 +5,7 @@
 // ============================================
 
 import { db } from '@/lib/db';
-import { guests, userApartmentContext } from '@/schema';
+import { guests, userApartmentContext } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';

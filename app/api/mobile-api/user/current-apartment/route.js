@@ -5,7 +5,7 @@
 // ============================================
 
 import { db } from '@/lib/db';
-import { apartmentOwnerships, apartments, communities, userApartmentContext } from '@/schema';
+import { apartmentOwnerships, apartments, communities, userApartmentContext } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
