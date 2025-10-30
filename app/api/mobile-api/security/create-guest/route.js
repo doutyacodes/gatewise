@@ -1,12 +1,13 @@
 // ============================================
 // FILE: app/api/mobile-api/security/create-guest/route.js
-// Create Guest Entry - Updated with New Fields
+// Create Guest Entry - Updated with New Fields & FCM Notifications
 // ============================================
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { guests, apartmentOwnerships } from "@/lib/db/schema";
+import { guests, apartmentOwnerships, users, apartments } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { jwtVerify } from "jose";
+import { sendFCMNotification } from "../../helpers/fcmHelper";
 
 const encoder = new TextEncoder();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
@@ -25,15 +26,22 @@ function generateQRCode() {
   return `GW-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 }
 
-// Find resident user ID from apartment ID
+// Find resident user data and apartment info from apartment ID
 async function findResidentByApartmentId(apartmentId, communityId) {
   try {
-    const [ownership] = await db
+    const result = await db
       .select({
         userId: apartmentOwnerships.userId,
         isApproved: apartmentOwnerships.isAdminApproved,
+        userName: users.name,
+        userFcmToken: users.fcmToken,
+        userExpoPushToken: users.expoPushToken,
+        apartmentNumber: apartments.apartmentNumber,
+        towerName: apartments.towerName,
       })
       .from(apartmentOwnerships)
+      .leftJoin(users, eq(apartmentOwnerships.userId, users.id))
+      .leftJoin(apartments, eq(apartmentOwnerships.apartmentId, apartments.id))
       .where(
         and(
           eq(apartmentOwnerships.apartmentId, apartmentId),
@@ -42,7 +50,7 @@ async function findResidentByApartmentId(apartmentId, communityId) {
       )
       .limit(1);
 
-    return ownership?.userId || null;
+    return result[0] || null;
   } catch (error) {
     console.error('Error finding resident:', error);
     return null;
@@ -89,14 +97,14 @@ export async function POST(request) {
       );
     }
 
-    // Find resident user ID
-    const residentUserId = await findResidentByApartmentId(apartmentId, security.communityId);
-    
-    if (!residentUserId) {
+    // Find resident user data
+    const residentData = await findResidentByApartmentId(apartmentId, security.communityId);
+
+    if (!residentData || !residentData.userId) {
       return NextResponse.json(
-        { 
-          success: false, 
-          error: 'No approved resident found for this apartment' 
+        {
+          success: false,
+          error: 'No approved resident found for this apartment'
         },
         { status: 404 }
       );
@@ -112,7 +120,7 @@ export async function POST(request) {
 
     // Insert guest entry
     const result = await db.insert(guests).values({
-      createdByUserId: residentUserId,
+      createdByUserId: residentData.userId,
       communityId: security.communityId,
       guestName: guestName.trim(),
       guestPhone: guestPhone?.trim() || null,
@@ -130,8 +138,88 @@ export async function POST(request) {
 
     const guestId = result[0].insertId;
 
-    // TODO: Send notification to resident
-    // notifyResident(residentUserId, guestName, apartmentNumber);
+    console.log('✅ Guest entry created:', guestId);
+
+    // Send FCM notification to resident
+    try {
+      console.log('📤 Sending notification to resident...');
+
+      const apartmentDisplay = residentData.towerName
+        ? `${residentData.towerName} - ${residentData.apartmentNumber}`
+        : residentData.apartmentNumber;
+
+      // Build notification payload
+      const notificationTitle = '🔔 New Guest Arrival';
+      const notificationBody = `${guestName} is waiting at the gate for ${apartmentDisplay}`;
+
+      // Notification data for deep linking
+      const notificationData = {
+        type: 'guest_arrival',
+        screen: 'security/guest-waiting',
+        guestId: guestId.toString(),
+        guestName: guestName,
+        apartmentId: apartmentId.toString(),
+        apartmentNumber: residentData.apartmentNumber,
+        qrCode: qrCode,
+        timestamp: now.toISOString(),
+      };
+
+      // Try sending via FCM token (if available)
+      if (residentData.userFcmToken) {
+        console.log('📱 Sending via FCM token...');
+
+        const fcmResult = await sendFCMNotification({
+          fcmToken: residentData.userFcmToken,
+          title: notificationTitle,
+          body: notificationBody,
+          data: notificationData,
+          channelId: 'guest-arrival',
+        });
+
+        if (fcmResult.success) {
+          console.log('✅ FCM notification sent successfully');
+        } else {
+          console.error('❌ FCM notification failed:', fcmResult.error);
+        }
+      }
+
+      // Try sending via Expo Push Token (fallback or alternative)
+      if (residentData.userExpoPushToken) {
+        console.log('📱 Sending via Expo Push Token...');
+
+        try {
+          const expoResponse = await fetch('https://exp.host/--/api/v2/push/send', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              to: residentData.userExpoPushToken,
+              title: notificationTitle,
+              body: notificationBody,
+              data: notificationData,
+              sound: 'notification.wav',
+              priority: 'high',
+              channelId: 'guest-arrival',
+            }),
+          });
+
+          const expoResult = await expoResponse.json();
+          console.log('✅ Expo notification sent:', expoResult);
+
+        } catch (expoError) {
+          console.error('❌ Expo notification failed:', expoError);
+        }
+      }
+
+      if (!residentData.userFcmToken && !residentData.userExpoPushToken) {
+        console.log('⚠️ No FCM or Expo token found for user. Notification not sent.');
+      }
+
+    } catch (notificationError) {
+      console.error('❌ Error sending notification:', notificationError);
+      // Don't fail the request if notification fails
+    }
 
     // Return success
     return NextResponse.json({
@@ -141,6 +229,7 @@ export async function POST(request) {
         guestId: guestId,
         qrCode: qrCode,
         status: 'pending',
+        notificationSent: !!(residentData.userFcmToken || residentData.userExpoPushToken),
       },
     });
 
