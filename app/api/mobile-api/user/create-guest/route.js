@@ -1,12 +1,11 @@
 // ============================================
-// API: Create Guest with QR Code
+// API: Create Guest with QR Code (NO Bearer token)
 // POST /api/mobile-api/user/create-guest
-// Creates a new guest and generates encrypted QR code
 // ============================================
 
 import { verifyToken } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { guests } from '@/lib/db/schema';
+import { guests, apartments } from '@/lib/db/schema';
 import crypto from 'crypto';
 import { eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
@@ -41,29 +40,10 @@ function generateSignature(guestId, qrCode) {
 
 export async function POST(request) {
   try {
-    // Verify authentication
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { success: false, message: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    const token = authHeader.substring(7);
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return NextResponse.json(
-        { success: false, message: 'Invalid token' },
-        { status: 401 }
-      );
-    }
-
-    const userId = decoded.userId;
-
     // Parse request body
     const body = await request.json();
     const {
+      token, // 👈 token now comes in body
       guestName,
       guestPhone,
       guestType,
@@ -77,6 +57,23 @@ export async function POST(request) {
       endTime,
       apartmentId,
     } = body;
+
+    if (!token) {
+      return NextResponse.json(
+        { success: false, message: 'Token missing' },
+        { status: 401 }
+      );
+    }
+
+    const decoded = verifyToken(token);
+    if (!decoded) {
+      return NextResponse.json(
+        { success: false, message: 'Invalid token' },
+        { status: 401 }
+      );
+    }
+
+    const userId = decoded.userId;
 
     // Validation
     if (!guestName || !apartmentId) {
@@ -100,11 +97,11 @@ export async function POST(request) {
       );
     }
 
-    // Determine guest status based on approval type
+    // Determine guest status
     const guestStatus =
-      approvalType === 'preapproved' ? 'approved' :
-      approvalType === 'private' ? 'approved' :
-      'pending';
+      approvalType === 'preapproved' || approvalType === 'private'
+        ? 'approved'
+        : 'pending';
 
     // Create guest record
     const [newGuest] = await db
@@ -126,17 +123,15 @@ export async function POST(request) {
         endTime: endTime || null,
         status: guestStatus,
         isActive: true,
-        qrCode: 'TEMP', // Temporary, will update
-        qrEncryptedData: 'TEMP', // Temporary, will update
+        qrCode: 'TEMP',
+        qrEncryptedData: 'TEMP',
       })
       .$returningId();
 
     const guestId = newGuest.id;
 
-    // Generate QR code
+    // Generate QR code and signature
     const qrCode = generateUniqueQRCode(guestId, apartmentId);
-
-    // Generate QR data object
     const qrData = {
       guestId: guestId.toString(),
       apartmentId: apartmentId.toString(),
@@ -154,10 +149,9 @@ export async function POST(request) {
       signature: generateSignature(guestId, qrCode),
     };
 
-    // Encrypt QR data
     const encryptedQRData = encryptQRData(qrData);
 
-    // Update guest with QR code
+    // Update guest with QR info
     await db
       .update(guests)
       .set({
@@ -166,7 +160,7 @@ export async function POST(request) {
       })
       .where(eq(guests.id, guestId));
 
-    // Get full guest data to return
+    // Get final guest data
     const [createdGuest] = await db
       .select()
       .from(guests)
@@ -179,7 +173,7 @@ export async function POST(request) {
       guest: createdGuest,
     });
   } catch (error) {
-    console.error('Create guest error:', error);
+    console.error('❌ Create guest error:', error);
     return NextResponse.json(
       { success: false, message: 'Internal server error' },
       { status: 500 }
