@@ -1,7 +1,8 @@
 // ============================================
 // FILE: app/api/mobile-api/user/my-apartments/route.js
-// Get user's apartments (owned and rented) - UPDATED with Bearer token
+// Get user's apartments (owned and rented) - UPDATED (no Bearer token, POST method)
 // ============================================
+
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import {
@@ -24,23 +25,23 @@ async function verifyMobileToken(token) {
   }
 }
 
-export async function GET(request) {
+export async function POST(request) {
   try {
-    // Verify authentication
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const body = await request.json();
+    const token = body.token;
+
+    if (!token) {
       return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
+        { success: false, error: "Token missing" },
         { status: 401 }
       );
     }
 
-    const token = authHeader.substring(7);
     const user = await verifyMobileToken(token);
 
-    if (!user || user.type !== 'user') {
+    if (!user || user.type !== "user") {
       return NextResponse.json(
-        { success: false, error: 'Invalid authentication' },
+        { success: false, error: "Invalid authentication" },
         { status: 401 }
       );
     }
