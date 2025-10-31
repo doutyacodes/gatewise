@@ -1,36 +1,56 @@
 // ============================================
-// API: Get Current Apartment
-// GET /api/mobile-api/user/current-apartment
-// Returns user's currently selected apartment with all apartments they have access to
+// FILE: app/api/mobile-api/user/current-apartment/route.js
+// Get user's current apartment (no Bearer token version)
 // ============================================
 
-import { verifyToken } from '@/lib/auth';
-import { db } from '@/lib/db';
-import { apartmentOwnerships, apartments, communities, userApartmentContext } from '@/lib/db/schema';
-import { and, eq } from 'drizzle-orm';
-import { NextResponse } from 'next/server';
+import { db } from "@/lib/db";
+import {
+  apartmentOwnerships,
+  apartments,
+  communities,
+  userApartmentContext,
+} from "@/lib/db/schema";
+import { and, eq } from "drizzle-orm";
+import { NextResponse } from "next/server";
+import { jwtVerify } from "jose";
 
-export async function GET(request) {
+const encoder = new TextEncoder();
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-this-in-production";
+
+// Token verification (no Bearer)
+async function verifyMobileToken(token) {
   try {
-    // Verify authentication
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const { payload } = await jwtVerify(token, encoder.encode(JWT_SECRET));
+    return payload;
+  } catch (error) {
+    return null;
+  }
+}
+
+export async function POST(request) {
+  try {
+    // Read request body
+    const body = await request.json();
+    const { token } = body;
+
+    if (!token) {
       return NextResponse.json(
-        { success: false, message: 'Unauthorized' },
+        { success: false, message: "Unauthorized - Missing token" },
         { status: 401 }
       );
     }
 
-    const token = authHeader.substring(7);
-    const decoded = verifyToken(token);
-    if (!decoded) {
+    // Verify token
+    const user = await verifyMobileToken(token);
+
+    if (!user || user.type !== "user") {
       return NextResponse.json(
-        { success: false, message: 'Invalid token' },
-        { status: 401 }
+        { success: false, message: "Only users can access apartments" },
+        { status: 403 }
       );
     }
 
-    const userId = decoded.userId;
+    const userId = user.id;
 
     // Get user's current apartment context
     const [context] = await db
@@ -64,7 +84,7 @@ export async function GET(request) {
     if (userApartments.length === 0) {
       return NextResponse.json({
         success: false,
-        message: 'No approved apartments found',
+        message: "No approved apartments found",
         apartment: null,
         allApartments: [],
       });
@@ -73,17 +93,15 @@ export async function GET(request) {
     // Determine current apartment
     let currentApartment;
     if (context) {
-      // User has a saved context
       currentApartment = userApartments.find(
         (apt) => apt.apartmentId === context.currentApartmentId
       );
     }
 
-    // If no context or context apartment not found, use first apartment
+    // If no context or invalid context, pick the first apartment
     if (!currentApartment) {
       currentApartment = userApartments[0];
 
-      // Save this as current context
       if (context) {
         await db
           .update(userApartmentContext)
@@ -106,9 +124,9 @@ export async function GET(request) {
       allApartments: userApartments,
     });
   } catch (error) {
-    console.error('Get current apartment error:', error);
+    console.error("❌ Get current apartment error:", error);
     return NextResponse.json(
-      { success: false, message: 'Internal server error' },
+      { success: false, message: "Internal server error" },
       { status: 500 }
     );
   }
