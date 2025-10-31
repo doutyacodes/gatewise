@@ -73,7 +73,7 @@ export async function POST(request) {
       );
     }
 
-    const userId = decoded.userId;
+    const userId = decoded.id;
 
     // Validation
     if (!guestName || !apartmentId) {
