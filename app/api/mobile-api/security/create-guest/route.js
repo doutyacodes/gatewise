@@ -98,7 +98,7 @@ export async function POST(request) {
     }
 
     // Find resident user data
-    const residentData = await findResidentByApartmentId(apartmentId, security.communityId);
+    const residentData = await findResidentByApartmentId(apartmentId, 4);
 
     if (!residentData || !residentData.userId) {
       return NextResponse.json(
@@ -121,7 +121,7 @@ export async function POST(request) {
     // Insert guest entry
     const result = await db.insert(guests).values({
       createdByUserId: residentData.userId,
-      communityId: security.communityId,
+      communityId: 4,
       guestName: guestName.trim(),
       guestPhone: guestPhone?.trim() || null,
       guestType: 'one_time', // Always one_time as per requirement
