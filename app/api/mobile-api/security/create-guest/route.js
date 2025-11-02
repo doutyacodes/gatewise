@@ -98,7 +98,7 @@ export async function POST(request) {
     }
 
     // Find resident user data
-    const residentData = await findResidentByApartmentId(apartmentId, 4);
+    const residentData = await findResidentByApartmentId(apartmentId, 2);
 
     if (!residentData || !residentData.userId) {
       return NextResponse.json(
@@ -121,7 +121,7 @@ export async function POST(request) {
     // Insert guest entry
     const result = await db.insert(guests).values({
       createdByUserId: residentData.userId,
-      communityId: 4,
+      communityId: 2,
       apartmentId: 4,
       guestName: guestName.trim(),
       guestPhone: guestPhone?.trim() || null,
