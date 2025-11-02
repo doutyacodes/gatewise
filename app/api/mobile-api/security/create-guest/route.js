@@ -122,6 +122,7 @@ export async function POST(request) {
     const result = await db.insert(guests).values({
       createdByUserId: residentData.userId,
       communityId: 4,
+      apartmentId: 4,
       guestName: guestName.trim(),
       guestPhone: guestPhone?.trim() || null,
       guestType: 'one_time', // Always one_time as per requirement
