@@ -72,8 +72,9 @@ export async function POST(request) {
         { status: 401 }
       );
     }
-
-    const userId = decoded.id;
+    const userData = await decoded;
+    const userId = userData.id;
+console.log('Decoded token:', userData);
 
     // Validation
     if (!guestName || !apartmentId) {

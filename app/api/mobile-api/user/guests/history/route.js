@@ -30,7 +30,8 @@ export async function GET(request) {
       );
     }
 
-    const userId = decoded.userId;
+    const userId = await decoded.id;
+
 
     // Get filter from query params
     const { searchParams } = new URL(request.url);

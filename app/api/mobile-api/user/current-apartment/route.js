@@ -50,7 +50,7 @@ export async function POST(request) {
       );
     }
 
-    const userId = user.id;
+    const userId = await user.id;
 
     // Get user's current apartment context
     const [context] = await db

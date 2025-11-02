@@ -30,7 +30,8 @@ export async function POST(request) {
       );
     }
 
-    const userId = decoded.userId;
+    const userId = await decoded.id;
+
 
     // Parse request body
     const body = await request.json();

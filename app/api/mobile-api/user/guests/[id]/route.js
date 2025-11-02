@@ -31,7 +31,8 @@ export async function DELETE(request, { params }) {
       );
     }
 
-    const userId = decoded.userId;
+    const userId = await decoded.id;
+
     const guestId = parseInt(params.id);
 
     if (isNaN(guestId)) {
@@ -100,7 +101,8 @@ export async function PATCH(request, { params }) {
       );
     }
 
-    const userId = decoded.userId;
+    const userId = await decoded.id;
+
     const guestId = parseInt(params.id);
 
     if (isNaN(guestId)) {
