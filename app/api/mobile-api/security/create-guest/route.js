@@ -98,7 +98,7 @@ export async function POST(request) {
     }
 
     // Find resident user data
-    const residentData = await findResidentByApartmentId(apartmentId, 2);
+    const residentData = await findResidentByApartmentId(8, 2);
 
     if (!residentData || !residentData.userId) {
       return NextResponse.json(
