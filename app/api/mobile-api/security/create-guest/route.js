@@ -98,7 +98,7 @@ export async function POST(request) {
     }
 
     // Find resident user data
-    const residentData = await findResidentByApartmentId(5, 2);
+    const residentData = await findResidentByApartmentId(9, 2);
 
     if (!residentData || !residentData.userId) {
       return NextResponse.json(
@@ -122,9 +122,9 @@ export async function POST(request) {
     const result = await db.insert(guests).values({
       createdByUserId: residentData.userId,
       communityId: 2,
-      apartmentId: 5,
       guestName: guestName.trim(),
       guestPhone: guestPhone?.trim() || null,
+      apartmentId: 9,
       guestType: 'one_time', // Always one_time as per requirement
       approvalType: 'needs_approval',
       startDate: startDate,
@@ -154,12 +154,15 @@ export async function POST(request) {
       const notificationBody = `${guestName} is waiting at the gate for ${apartmentDisplay}`;
 
       // Notification data for deep linking
+      // IMPORTANT: Include title and body in data payload for Android native handling
       const notificationData = {
         type: 'guest_arrival',
         screen: 'user/guest-approval',
+        title: notificationTitle, // Add title to data payload
+        body: notificationBody,   // Add body to data payload
         guestId: guestId.toString(),
         guestName: guestName,
-        apartmentId: apartmentId.toString(),
+        apartmentId: 9,
         apartmentNumber: residentData.apartmentNumber,
         qrCode: qrCode,
         vehicleNumber: vehicleNumber || '',

@@ -84,7 +84,8 @@ export async function POST(request) {
     const guest = guestQuery[0];
 
     // Check if user is authorized (is the apartment owner)
-    if (guest.createdByUserId !== user.userId) {
+    // Note: JWT payload has 'id', not 'userId'
+    if (guest.createdByUserId !== user.id) {
       return NextResponse.json(
         { success: false, error: 'Not authorized to approve this guest' },
         { status: 403 }

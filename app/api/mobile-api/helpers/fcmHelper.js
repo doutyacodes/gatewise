@@ -50,179 +50,100 @@ export async function sendFCMNotification(options) {
       };
     }
 
-    // TODO: Implement actual FCM sending
-    // For now, log the notification that would be sent
+    // Convert all data values to strings (FCM requirement)
+    const stringifiedData = {};
+    for (const [key, value] of Object.entries(data)) {
+      stringifiedData[key] = String(value);
+    }
+    stringifiedData.channelId = channelId;
+
+    // Log the notification details
     console.log('📝 Notification to send:', {
       token: fcmToken,
       notification: {
         title,
         body,
       },
-      data: {
-        ...data,
-        channelId,
-      },
+      data: stringifiedData,
       android: {
         priority: 'high',
         notification: {
           channelId,
-          sound: 'notification.wav',
+          sound: 'guest_arrival_ringtone',
           priority: 'high',
-        },
-      },
-      apns: {
-        payload: {
-          aps: {
-            sound: 'notification.wav',
-            badge: 1,
-          },
         },
       },
     });
 
-    // IMPLEMENTATION OPTIONS:
+    // ============================================
+    // IMPLEMENTATION: Firebase Admin SDK
+    // ============================================
+    try {
+      const admin = require('firebase-admin');
 
-    // Option 1: Use Firebase Admin SDK (Recommended for production)
-    /*
-    const admin = require('firebase-admin');
+      // Initialize Firebase Admin (only once)
+      if (!admin.apps.length) {
+        // Try to initialize with service account from environment variable
+        if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+          console.log('🔐 Initializing Firebase Admin with service account...');
+          const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+          admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount),
+          });
+        } else {
+          console.log('🔐 Initializing Firebase Admin with default credentials...');
+          // Use default credentials from GOOGLE_APPLICATION_CREDENTIALS env variable
+          admin.initializeApp({
+            credential: admin.credential.applicationDefault(),
+          });
+        }
+        console.log('✅ Firebase Admin initialized');
+      }
 
-    if (!admin.apps.length) {
-      admin.initializeApp({
-        credential: admin.credential.applicationDefault(),
-      });
-    }
-
-    const message = {
-      token: fcmToken,
-      notification: {
-        title,
-        body,
-      },
-      data: {
-        ...data,
-        channelId,
-      },
-      android: {
-        priority: 'high',
-        notification: {
-          channelId,
-          sound: 'notification.wav',
+      // Build the FCM message
+      const message = {
+        token: fcmToken,
+        data: stringifiedData, // Only data payload (no notification object for full control)
+        android: {
           priority: 'high',
-        },
-      },
-      apns: {
-        payload: {
-          aps: {
-            sound: 'notification.wav',
-            badge: 1,
-          },
-        },
-      },
-    };
-
-    const response = await admin.messaging().send(message);
-    console.log('✅ FCM sent successfully:', response);
-
-    return {
-      success: true,
-      messageId: response,
-    };
-    */
-
-    // Option 2: Use HTTP API with service account
-    /*
-    const { GoogleAuth } = require('google-auth-library');
-
-    const auth = new GoogleAuth({
-      scopes: 'https://www.googleapis.com/auth/firebase.messaging',
-    });
-
-    const client = await auth.getClient();
-    const accessToken = await client.getAccessToken();
-
-    const projectId = 'your-project-id'; // From google-services.json
-    const url = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken.token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        message: {
-          token: fcmToken,
           notification: {
-            title,
-            body,
-          },
-          data: {
-            ...data,
-            channelId,
-          },
-          android: {
+            channelId: channelId,
+            sound: 'guest_arrival_ringtone',
             priority: 'high',
-            notification: {
-              channelId,
-              sound: 'notification.wav',
+            defaultSound: false,
+            defaultVibrateTimings: false,
+          },
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: 'guest_arrival_ringtone.wav',
+              badge: 1,
+              contentAvailable: true,
             },
           },
         },
-      }),
-    });
+      };
 
-    const result = await response.json();
-    console.log('✅ FCM sent successfully:', result);
-
-    return {
-      success: true,
-      messageId: result.name,
-    };
-    */
-
-    // Option 3: Use Expo Push Notifications (Recommended for Expo projects)
-    /*
-    const expoPushToken = data.expoPushToken;
-
-    if (expoPushToken) {
-      const response = await fetch('https://exp.host/--/api/v2/push/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          to: expoPushToken,
-          title,
-          body,
-          data: {
-            ...data,
-            channelId,
-          },
-          sound: 'notification.wav',
-          priority: 'high',
-          channelId,
-        }),
-      });
-
-      const result = await response.json();
-      console.log('✅ Expo notification sent:', result);
+      console.log('📤 Sending FCM message via Firebase Admin SDK...');
+      const response = await admin.messaging().send(message);
+      console.log('✅ FCM sent successfully! Message ID:', response);
 
       return {
         success: true,
-        data: result,
+        messageId: response,
+      };
+
+    } catch (adminError) {
+      console.error('❌ Firebase Admin SDK error:', adminError);
+      console.error('Error details:', adminError.message);
+
+      // If Admin SDK fails, return error
+      return {
+        success: false,
+        error: adminError.message || 'Failed to send FCM notification',
       };
     }
-    */
-
-    // For now, return mock success
-    console.log('⚠️ FCM sending not implemented - notification logged only');
-    console.log('💡 To enable: Uncomment one of the implementation options above');
-
-    return {
-      success: true,
-      messageId: 'mock-' + Date.now(),
-      mock: true,
-    };
 
   } catch (error) {
     console.error('❌ Error sending FCM notification:', error);
