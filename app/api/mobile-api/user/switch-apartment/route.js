@@ -1,125 +1,89 @@
 // ============================================
-// API: Switch Apartment
-// POST /api/mobile-api/user/switch-apartment
-// Updates user's current apartment context
+// FILE: app/api/mobile-api/user/switch-apartment/route.js
+// Switch current apartment for logged-in user
 // ============================================
 
-import { verifyToken } from '@/lib/auth';
-import { db } from '@/lib/db';
-import { userApartmentContext, apartmentOwnerships, apartments, communities } from '@/lib/db/schema';
-import { eq, and } from 'drizzle-orm';
-import { NextResponse } from 'next/server';
+import { db } from "@/lib/db";
+import { userApartmentContext, apartmentOwnerships, apartments } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
+import { jwtVerify } from "jose";
+import { NextResponse } from "next/server";
+
+const encoder = new TextEncoder();
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-this-in-production";
+
+async function verifyMobileToken(token) {
+  try {
+    const { payload } = await jwtVerify(token, encoder.encode(JWT_SECRET));
+    return payload;
+  } catch {
+    return null;
+  }
+}
 
 export async function POST(request) {
   try {
-    // Verify authentication
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { success: false, message: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
+    const authHeader = request.headers.get("authorization");
+    const token = authHeader?.replace("Bearer ", "");
 
-    const token = authHeader.substring(7);
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return NextResponse.json(
-        { success: false, message: 'Invalid token' },
-        { status: 401 }
-      );
-    }
+    if (!token)
+      return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
 
-    const userId = await decoded.id;
+    const user = await verifyMobileToken(token);
+    if (!user) return NextResponse.json({ success: false, message: "Invalid token" }, { status: 401 });
 
+    const { apartmentId } = await request.json();
 
-    // Parse request body
-    const body = await request.json();
-    const { apartmentId } = body;
+    if (!apartmentId)
+      return NextResponse.json({ success: false, message: "apartmentId is required" }, { status: 400 });
 
-    if (!apartmentId) {
-      return NextResponse.json(
-        { success: false, message: 'Apartment ID is required' },
-        { status: 400 }
-      );
-    }
-
-    // Verify user has access to this apartment
+    // Validate apartment ownership
     const [ownership] = await db
       .select()
       .from(apartmentOwnerships)
-      .where(
-        and(
-          eq(apartmentOwnerships.userId, userId),
-          eq(apartmentOwnerships.apartmentId, apartmentId),
-          eq(apartmentOwnerships.isAdminApproved, true)
-        )
-      )
-      .limit(1);
+      .where(eq(apartmentOwnerships.userId, user.id));
 
-    if (!ownership) {
-      return NextResponse.json(
-        { success: false, message: 'You do not have access to this apartment' },
-        { status: 403 }
-      );
-    }
+    if (!ownership)
+      return NextResponse.json({ success: false, message: "Apartment not found or unauthorized" }, { status: 404 });
 
-    // Get apartment details
-    const [apartment] = await db
-      .select({
-        apartmentId: apartments.id,
-        apartmentNumber: apartments.apartmentNumber,
-        towerName: apartments.towerName,
-        floorNumber: apartments.floorNumber,
-        communityId: apartments.communityId,
-        communityName: communities.name,
-      })
-      .from(apartments)
-      .leftJoin(communities, eq(apartments.communityId, communities.id))
-      .where(eq(apartments.id, apartmentId))
-      .limit(1);
-
-    if (!apartment) {
-      return NextResponse.json(
-        { success: false, message: 'Apartment not found' },
-        { status: 404 }
-      );
-    }
-
-    // Check if user has existing context
-    const [existingContext] = await db
+    // Check if context already exists
+    const [existing] = await db
       .select()
       .from(userApartmentContext)
-      .where(eq(userApartmentContext.userId, userId))
-      .limit(1);
+      .where(eq(userApartmentContext.userId, user.id));
 
-    if (existingContext) {
-      // Update existing context
+    if (existing) {
       await db
         .update(userApartmentContext)
         .set({
           currentApartmentId: apartmentId,
           lastSwitchedAt: new Date(),
         })
-        .where(eq(userApartmentContext.userId, userId));
+        .where(eq(userApartmentContext.userId, user.id));
     } else {
-      // Create new context
       await db.insert(userApartmentContext).values({
-        userId,
+        userId: user.id,
         currentApartmentId: apartmentId,
       });
     }
 
+    // Get apartment info for confirmation
+    const [apartmentInfo] = await db
+      .select({
+        id: apartments.id,
+        apartmentNumber: apartments.apartmentNumber,
+        towerName: apartments.towerName,
+      })
+      .from(apartments)
+      .where(eq(apartments.id, apartmentId));
+
     return NextResponse.json({
       success: true,
-      message: 'Apartment switched successfully',
-      apartment,
+      message: "Apartment switched successfully",
+      apartment: apartmentInfo,
     });
-  } catch (error) {
-    console.error('Switch apartment error:', error);
-    return NextResponse.json(
-      { success: false, message: 'Internal server error' },
-      { status: 500 }
-    );
+  } catch (err) {
+    console.error("❌ Switch apartment error:", err);
+    return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 });
   }
 }

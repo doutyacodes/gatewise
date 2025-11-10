@@ -98,7 +98,7 @@ export async function POST(request) {
     }
 
     // Find resident user data
-    const residentData = await findResidentByApartmentId(9, 2);
+    const residentData = await findResidentByApartmentId(11, 2);
 
     if (!residentData || !residentData.userId) {
       return NextResponse.json(
@@ -122,9 +122,9 @@ export async function POST(request) {
     const result = await db.insert(guests).values({
       createdByUserId: residentData.userId,
       communityId: 2,
+      apartmentId: 11,
       guestName: guestName.trim(),
       guestPhone: guestPhone?.trim() || null,
-      apartmentId: 9,
       guestType: 'one_time', // Always one_time as per requirement
       approvalType: 'needs_approval',
       startDate: startDate,
@@ -162,7 +162,7 @@ export async function POST(request) {
         body: notificationBody,   // Add body to data payload
         guestId: guestId.toString(),
         guestName: guestName,
-        apartmentId: 9,
+        apartmentId: 11,
         apartmentNumber: residentData.apartmentNumber,
         qrCode: qrCode,
         vehicleNumber: vehicleNumber || '',
