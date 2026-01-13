@@ -4,7 +4,6 @@
 // Returns frequent guests (active/inactive toggle)
 // ============================================
 
-import { verifyToken } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
   guests,
@@ -15,28 +14,20 @@ import {
 } from "@/lib/db/schema";
 import { eq, and, or, desc, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { requireAuth } from "@/mobile-api/middleware/auth";
 
 export async function POST(request) {
   try {
-    const body = await request.json();
-    const { token } = body;
-
-    if (!token) {
+    // Authenticate user
+    const authResult = await requireAuth(request, ['user']);
+    if (!authResult.authorized) {
       return NextResponse.json(
-        { success: false, message: "Token missing" },
+        { success: false, error: authResult.error },
         { status: 401 }
       );
     }
 
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return NextResponse.json(
-        { success: false, message: "Invalid token" },
-        { status: 401 }
-      );
-    }
-
-    const userId = await decoded.id; // ✅ fixed — no need for await
+    const userId = authResult.userId;
 
     // Fetch frequent guests for this user (both active/inactive)
     const activeGuests = await db

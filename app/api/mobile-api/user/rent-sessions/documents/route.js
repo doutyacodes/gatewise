@@ -7,46 +7,27 @@ import { db } from "@/lib/db";
 import {
   rentSessions,
   rentSessionDocuments,
+  users,
 } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { jwtVerify } from "jose";
-
-const encoder = new TextEncoder();
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-this-in-production";
-
-// Token verification
-async function verifyMobileToken(token) {
-  try {
-    const { payload } = await jwtVerify(token, encoder.encode(JWT_SECRET));
-    return payload;
-  } catch (error) {
-    return null;
-  }
-}
+import { requireAuth } from "@/mobile-api/middleware/auth";
 
 // ============================================
 // POST - Upload document for rent session
 // ============================================
 export async function POST(request) {
   try {
-    const authHeader = request.headers.get("authorization");
-    const token = authHeader?.replace("Bearer ", "");
-
-    if (!token) {
+    // Authenticate user
+    const authResult = await requireAuth(request, ["user"]);
+    if (!authResult.authorized) {
       return NextResponse.json(
-        { success: false, message: "Unauthorized - Missing token" },
+        { success: false, error: authResult.error },
         { status: 401 }
       );
     }
 
-    const user = await verifyMobileToken(token);
-    if (!user || user.type !== "user") {
-      return NextResponse.json(
-        { success: false, message: "Only users can upload documents" },
-        { status: 403 }
-      );
-    }
+    const userId = authResult.userId;
 
     // Parse multipart form data
     const formData = await request.formData();
@@ -56,12 +37,10 @@ export async function POST(request) {
 
     if (!sessionId || !documentType || !file) {
       return NextResponse.json(
-        { success: false, message: "Missing required fields" },
+        { success: false, error: "Missing required fields" },
         { status: 400 }
       );
     }
-
-    const userId = user.id;
 
     // Get session details
     const [session] = await db
@@ -135,35 +114,26 @@ export async function POST(request) {
 // ============================================
 export async function GET(request) {
   try {
-    const authHeader = request.headers.get("authorization");
-    const token = authHeader?.replace("Bearer ", "");
-
-    if (!token) {
+    // Authenticate user
+    const authResult = await requireAuth(request, ["user"]);
+    if (!authResult.authorized) {
       return NextResponse.json(
-        { success: false, message: "Unauthorized - Missing token" },
+        { success: false, error: authResult.error },
         { status: 401 }
       );
     }
 
-    const user = await verifyMobileToken(token);
-    if (!user || user.type !== "user") {
-      return NextResponse.json(
-        { success: false, message: "Only users can view documents" },
-        { status: 403 }
-      );
-    }
+    const userId = authResult.userId;
 
     const { searchParams } = new URL(request.url);
     const sessionId = searchParams.get("sessionId");
 
     if (!sessionId) {
       return NextResponse.json(
-        { success: false, message: "Session ID required" },
+        { success: false, error: "Session ID required" },
         { status: 400 }
       );
     }
-
-    const userId = user.id;
 
     // Get session details
     const [session] = await db
@@ -187,17 +157,31 @@ export async function GET(request) {
       );
     }
 
-    // Get all documents for this session
+    // Get all documents for this session with uploader details
     const documents = await db
-      .select()
+      .select({
+        id: rentSessionDocuments.id,
+        sessionId: rentSessionDocuments.sessionId,
+        documentType: rentSessionDocuments.documentType,
+        documentFilename: rentSessionDocuments.documentFilename,
+        uploadedBy: rentSessionDocuments.uploadedBy,
+        uploaderName: users.name,
+        approvalStatus: rentSessionDocuments.approvalStatus,
+        rejectionReason: rentSessionDocuments.rejectionReason,
+        uploadedAt: rentSessionDocuments.uploadedAt,
+      })
       .from(rentSessionDocuments)
+      .leftJoin(users, eq(rentSessionDocuments.uploadedBy, users.id))
       .where(eq(rentSessionDocuments.sessionId, parseInt(sessionId)))
-      .orderBy(rentSessionDocuments.uploadedAt);
+      .orderBy(desc(rentSessionDocuments.uploadedAt));
+
+    // Determine user role
+    const userRole = session.ownerId === userId ? 'owner' : 'tenant';
 
     return NextResponse.json({
       success: true,
       documents,
-      userRole: session.ownerId === userId ? 'owner' : 'tenant',
+      userRole,
     });
 
   } catch (error) {

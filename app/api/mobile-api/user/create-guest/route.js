@@ -1,14 +1,14 @@
 // ============================================
-// API: Create Guest with QR Code (NO Bearer token)
+// API: Create Guest with QR Code
 // POST /api/mobile-api/user/create-guest
 // ============================================
 
-import { verifyToken } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { guests, apartments } from '@/lib/db/schema';
 import crypto from 'crypto';
 import { eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
+import { requireAuth } from '@/mobile-api/middleware/auth';
 
 // QR Encryption (Server-side - use same key as client)
 const SECRET_KEY = 'GateWise2025SecureQRCodeEncryptionKey!@#$%';
@@ -40,10 +40,20 @@ function generateSignature(guestId, qrCode) {
 
 export async function POST(request) {
   try {
+    // Authenticate user
+    const authResult = await requireAuth(request, ['user']);
+    if (!authResult.authorized) {
+      return NextResponse.json(
+        { success: false, error: authResult.error },
+        { status: 401 }
+      );
+    }
+
+    const userId = authResult.userId;
+
     // Parse request body
     const body = await request.json();
     const {
-      token, // 👈 token now comes in body
       guestName,
       guestPhone,
       guestType,
@@ -57,24 +67,6 @@ export async function POST(request) {
       endTime,
       apartmentId,
     } = body;
-
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: 'Token missing' },
-        { status: 401 }
-      );
-    }
-
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return NextResponse.json(
-        { success: false, message: 'Invalid token' },
-        { status: 401 }
-      );
-    }
-    const userData = await decoded;
-    const userId = userData.id;
-console.log('Decoded token:', userData);
 
     // Validation
     if (!guestName || !apartmentId) {

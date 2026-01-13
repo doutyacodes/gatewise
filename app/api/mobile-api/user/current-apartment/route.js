@@ -1,6 +1,6 @@
 // ============================================
 // FILE: app/api/mobile-api/user/current-apartment/route.js
-// Get user's current apartment (no Bearer token version)
+// Get user's current apartment
 // ============================================
 
 import { db } from "@/lib/db";
@@ -12,45 +12,20 @@ import {
 } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { jwtVerify } from "jose";
-
-const encoder = new TextEncoder();
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-this-in-production";
-
-// Token verification (no Bearer)
-async function verifyMobileToken(token) {
-  try {
-    const { payload } = await jwtVerify(token, encoder.encode(JWT_SECRET));
-    return payload;
-  } catch (error) {
-    return null;
-  }
-}
+import { requireAuth } from "@/mobile-api/middleware/auth";
 
 export async function POST(request) {
   try {
-    // Read request body
-    const body = await request.json();
-    const { token } = body;
-
-    if (!token) {
+    // Authenticate user
+    const authResult = await requireAuth(request, ['user']);
+    if (!authResult.authorized) {
       return NextResponse.json(
-        { success: false, message: "Unauthorized - Missing token" },
+        { success: false, error: authResult.error },
         { status: 401 }
       );
     }
 
-    // Verify token
-    const user = await verifyMobileToken(token);
-
-    if (!user || user.type !== "user") {
-      return NextResponse.json(
-        { success: false, message: "Only users can access apartments" },
-        { status: 403 }
-      );
-    }
-
-    const userId = await user.id;
+    const userId = authResult.userId;
 
     // Get user's current apartment context
     const [context] = await db

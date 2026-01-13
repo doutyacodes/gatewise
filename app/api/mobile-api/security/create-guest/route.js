@@ -5,21 +5,9 @@
 import { db } from "@/lib/db";
 import { apartmentOwnerships, apartments, guests, users } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
-import { jwtVerify } from "jose";
 import { NextResponse } from "next/server";
 import { sendFCMNotification } from "../../helpers/fcmHelper";
-
-const encoder = new TextEncoder();
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
-
-async function verifyMobileToken(token) {
-  try {
-    const { payload } = await jwtVerify(token, encoder.encode(JWT_SECRET));
-    return payload;
-  } catch (error) {
-    return null;
-  }
-}
+import { requireAuth } from "@/mobile-api/middleware/auth";
 
 // Generate unique QR code
 function generateQRCode() {
@@ -60,23 +48,15 @@ async function findResidentByApartmentId(apartmentId, communityId) {
 export async function POST(request) {
   try {
     // Verify authentication
-    // const authHeader = request.headers.get('Authorization');
-    // if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    //   return NextResponse.json(
-    //     { success: false, error: 'Unauthorized' },
-    //     { status: 401 }
-    //   );
-    // }
+    const authResult = await requireAuth(request, ['security']);
+    if (!authResult.authorized) {
+      return NextResponse.json(
+        { success: false, error: authResult.error },
+        { status: 401 }
+      );
+    }
 
-    // const token = authHeader.substring(7);
-    // const security = await verifyMobileToken(token);
-
-    // if (!security || security.type !== 'security') {
-    //   return NextResponse.json(
-    //     { success: false, error: 'Invalid authentication' },
-    //     { status: 401 }
-    //   );
-    // }
+    const securityId = authResult.userId;
 
     // Parse request body
     const body = await request.json();
@@ -97,8 +77,24 @@ export async function POST(request) {
       );
     }
 
+    // Get apartment info to find communityId
+    const [apartmentInfo] = await db
+      .select({ communityId: apartments.communityId })
+      .from(apartments)
+      .where(eq(apartments.id, apartmentId))
+      .limit(1);
+
+    if (!apartmentInfo) {
+      return NextResponse.json(
+        { success: false, error: 'Apartment not found' },
+        { status: 404 }
+      );
+    }
+
+    const communityId = apartmentInfo.communityId;
+
     // Find resident user data
-    const residentData = await findResidentByApartmentId(11, 2);
+    const residentData = await findResidentByApartmentId(apartmentId, communityId);
 
     if (!residentData || !residentData.userId) {
       return NextResponse.json(
@@ -121,8 +117,8 @@ export async function POST(request) {
     // Insert guest entry
     const result = await db.insert(guests).values({
       createdByUserId: residentData.userId,
-      communityId: 2,
-      apartmentId: 11,
+      communityId: communityId,
+      apartmentId: apartmentId,
       guestName: guestName.trim(),
       guestPhone: guestPhone?.trim() || null,
       guestType: 'one_time', // Always one_time as per requirement
@@ -162,7 +158,7 @@ export async function POST(request) {
         body: notificationBody,   // Add body to data payload
         guestId: guestId.toString(),
         guestName: guestName,
-        apartmentId: 11,
+        apartmentId: apartmentId.toString(),
         apartmentNumber: residentData.apartmentNumber,
         qrCode: qrCode,
         vehicleNumber: vehicleNumber || '',

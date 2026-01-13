@@ -5,17 +5,15 @@
 
 import { db } from "@/lib/db";
 import {
-  rentSessions,
-  apartmentOwnerships,
-  apartments,
-  users,
-  rentSessionAdditionalCharges,
-  tenantPreferences,
-  rentSessionDocuments,
+    apartmentOwnerships,
+    rentSessionAdditionalCharges,
+    rentSessions,
+    tenantPreferences,
+    users
 } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
-import { NextResponse } from "next/server";
 import { jwtVerify } from "jose";
+import { NextResponse } from "next/server";
 
 const encoder = new TextEncoder();
 const JWT_SECRET =
