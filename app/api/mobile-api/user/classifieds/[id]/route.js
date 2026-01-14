@@ -14,7 +14,7 @@ import {
 } from "@/lib/db/schema";
 import { eq, desc, and, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/mobile-api/middleware/auth";
+import { requireAuth } from "../../../middleware/auth";
 
 // ============================================
 // GET - Get Classified Details

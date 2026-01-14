@@ -7,7 +7,7 @@ import { db } from "@/lib/db/drizzle";
 import { rentPayments, rentSessions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/mobile-api/middleware/auth";
+import { requireAuth } from "@/app/api/mobile-api/middleware/auth";
 
 // ============================================
 // PUT - Update Payment (Edit amount or dispute)

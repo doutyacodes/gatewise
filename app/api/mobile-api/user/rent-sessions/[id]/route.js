@@ -14,7 +14,7 @@ import {
 } from "@/lib/db/schema";
 import { eq, and, count } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/mobile-api/middleware/auth";
+import { requireAuth } from "@/app/api/mobile-api/middleware/auth";
 
 // ============================================
 // GET - Get Rent Session Details

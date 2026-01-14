@@ -11,7 +11,7 @@ import {
 } from "@/lib/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/mobile-api/middleware/auth";
+import { requireAuth } from "@/app/api/mobile-api/middleware/auth";
 
 // ============================================
 // POST - Upload document for rent session

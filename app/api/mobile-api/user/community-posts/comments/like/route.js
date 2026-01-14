@@ -6,8 +6,8 @@
 import { db } from "@/lib/db/drizzle";
 import { eq, and } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { requireAuth } from "@/mobile-api/middleware/auth";
 import { mysqlTable, bigint, timestamp } from "drizzle-orm/mysql-core";
+import { requireAuth } from "@/app/api/mobile-api/middleware/auth";
 
 // Create likes table schema inline
 const communityPostCommentLikes = mysqlTable("community_post_comment_likes", {

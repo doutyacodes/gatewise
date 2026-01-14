@@ -7,7 +7,7 @@ import { apartmentOwnerships, apartments, guests, users } from "@/lib/db/schema"
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { sendFCMNotification } from "../../helpers/fcmHelper";
-import { requireAuth } from "@/mobile-api/middleware/auth";
+import { requireAuth } from "../../middleware/auth";
 
 // Generate unique QR code
 function generateQRCode() {
