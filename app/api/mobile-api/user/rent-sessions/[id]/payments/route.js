@@ -3,7 +3,7 @@
 // Rent Payments - List and Create
 // ============================================
 
-import { db } from "@/lib/db/drizzle";
+import { db } from "@/lib/db";
 import { rentPayments, rentSessions, users } from "@/lib/db/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { NextResponse } from "next/server";

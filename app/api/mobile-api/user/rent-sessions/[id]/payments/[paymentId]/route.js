@@ -3,7 +3,7 @@
 // Payment Approval, Dispute, Edit
 // ============================================
 
-import { db } from "@/lib/db/drizzle";
+import { db } from "@/lib/db";
 import { rentPayments, rentSessions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";

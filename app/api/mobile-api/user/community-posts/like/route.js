@@ -3,11 +3,11 @@
 // Like/Unlike Community Posts
 // ============================================
 
-import { db } from "@/lib/db/drizzle";
 import { eq, and } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/app/api/mobile-api/middleware/auth";
 import { mysqlTable, bigint, timestamp } from "drizzle-orm/mysql-core";
+import { db } from "@/lib/db";
 
 // Create likes table schema inline
 const communityPostLikes = mysqlTable("community_post_likes", {

@@ -3,7 +3,7 @@
 // Accessory Update, Delete, Approve
 // ============================================
 
-import { db } from "@/lib/db/drizzle";
+import { db } from "@/lib/db";
 import { roomAccessories, apartmentRooms, rentSessions, apartmentOwnerships } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { NextResponse } from "next/server";

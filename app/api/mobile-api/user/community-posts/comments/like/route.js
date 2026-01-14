@@ -3,7 +3,7 @@
 // Like/Unlike Community Post Comments
 // ============================================
 
-import { db } from "@/lib/db/drizzle";
+import { db } from "@/lib/db";
 import { eq, and } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { mysqlTable, bigint, timestamp } from "drizzle-orm/mysql-core";

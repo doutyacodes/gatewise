@@ -3,7 +3,7 @@
 // Room Accessories - List and Create
 // ============================================
 
-import { db } from "@/lib/db/drizzle";
+import { db } from "@/lib/db";
 import { roomAccessories, apartmentRooms, rentSessions, apartmentOwnerships, apartments } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { NextResponse } from "next/server";

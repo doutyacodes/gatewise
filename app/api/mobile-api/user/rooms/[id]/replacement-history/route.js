@@ -3,7 +3,7 @@
 // Accessory Replacement History - List and Create
 // ============================================
 
-import { db } from "@/lib/db/drizzle";
+import { db } from "@/lib/db";
 import {
   accessoryReplacementHistory,
   apartmentRooms,

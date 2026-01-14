@@ -3,7 +3,7 @@
 // Get and Update Classified Details
 // ============================================
 
-import { db } from "@/lib/db/drizzle";
+import { db } from "@/lib/db";
 import {
   classifieds,
   classifiedImages,

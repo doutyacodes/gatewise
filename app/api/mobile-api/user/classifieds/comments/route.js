@@ -3,7 +3,7 @@
 // Classified Comments Management
 // ============================================
 
-import { db } from "@/lib/db/drizzle";
+import { db } from "@/lib/db";
 import { classifiedComments, users, apartments, apartmentOwnerships } from "@/lib/db/schema";
 import { eq, desc, and, isNull } from "drizzle-orm";
 import { NextResponse } from "next/server";

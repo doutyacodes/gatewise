@@ -3,7 +3,7 @@
 // List and Create Classifieds
 // ============================================
 
-import { db } from "@/lib/db/drizzle";
+import { db } from "@/lib/db";
 import {
   classifieds,
   classifiedImages,

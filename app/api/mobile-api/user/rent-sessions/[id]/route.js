@@ -3,7 +3,7 @@
 // Rent Session Details
 // ============================================
 
-import { db } from "@/lib/db/drizzle";
+import { db } from "@/lib/db";
 import {
   rentSessions,
   rentSessionAdditionalCharges,
