@@ -8,7 +8,7 @@ import { guests, apartments } from '@/lib/db/schema';
 import crypto from 'crypto';
 import { eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
-import { requireAuth } from '@/mobile-api/middleware/auth';
+import { requireAuth } from '@/app/api/mobile-api/middleware/auth';
 
 // QR Encryption (Server-side - use same key as client)
 const SECRET_KEY = 'GateWise2025SecureQRCodeEncryptionKey!@#$%';
