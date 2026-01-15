@@ -54,6 +54,7 @@ export async function GET(request) {
         isAdminApproved: apartmentOwnerships.isAdminApproved,
         createdAt: apartmentOwnerships.createdAt,
         apartmentId: apartments.id,
+        id: apartments.id,
         towerName: apartments.towerName,
         floorNumber: apartments.floorNumber,
         apartmentNumber: apartments.apartmentNumber,
