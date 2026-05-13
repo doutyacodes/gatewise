@@ -8,9 +8,10 @@ import {
   apartmentOwnerships,
   apartments,
   communities,
+  rentSessions,
   userApartmentContext,
 } from "@/lib/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/app/api/mobile-api/middleware/auth";
 
@@ -45,10 +46,19 @@ export async function POST(request) {
         communityId: apartments.communityId,
         communityName: communities.name,
         isAdminApproved: apartmentOwnerships.isAdminApproved,
+        rentSessionId: rentSessions.id,
       })
       .from(apartmentOwnerships)
       .innerJoin(apartments, eq(apartmentOwnerships.apartmentId, apartments.id))
       .innerJoin(communities, eq(apartments.communityId, communities.id))
+      .leftJoin(
+        rentSessions,
+        and(
+          eq(rentSessions.apartmentId, apartments.id),
+          eq(rentSessions.status, "active"),
+          or(eq(rentSessions.ownerId, userId), eq(rentSessions.tenantId, userId))
+        )
+      )
       .where(
         and(
           eq(apartmentOwnerships.userId, userId),
