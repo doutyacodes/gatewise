@@ -10,6 +10,7 @@ import {
   communityPosts,
   communityPostImages,
   communityPostComments,
+  communityPostLikes,
   users,
   apartmentOwnerships,
   apartments,
@@ -128,7 +129,7 @@ export async function GET(request) {
 
         // Get comment count (including replies)
         const [commentCountResult] = await db
-          .select({ count: sql  `count(*)` })
+          .select({ count: sql`count(*)` })
           .from(communityPostComments)
           .where(
             and(
@@ -136,6 +137,24 @@ export async function GET(request) {
               eq(communityPostComments.isDeleted, false)
             )
           );
+
+        // Get like count
+        const [likeCountResult] = await db
+          .select({ count: sql`count(*)` })
+          .from(communityPostLikes)
+          .where(eq(communityPostLikes.postId, postId));
+
+        // Check if current user liked it
+        const [userLikeResult] = await db
+          .select({ id: communityPostLikes.id })
+          .from(communityPostLikes)
+          .where(
+            and(
+              eq(communityPostLikes.postId, postId),
+              eq(communityPostLikes.userId, userId)
+            )
+          )
+          .limit(1);
 
         return {
           id: item.post.id,
@@ -149,8 +168,8 @@ export async function GET(request) {
           images: images.map((img) => `${IMAGE_BASE_URL}${img.imageFilename}`),
           commentCount: commentCountResult.count,
           createdAt: item.post.createdAt,
-          isLiked: false, // TODO: Implement likes table
-          likeCount: 0, // TODO: Implement likes table
+          isLiked: !!userLikeResult,
+          likeCount: likeCountResult.count,
         };
       })
     );

@@ -14,6 +14,8 @@ import {
 } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { jwtVerify } from "jose";
+import { cookies } from "next/headers";
+import { verifyToken } from "@/lib/auth";
 
 const encoder = new TextEncoder();
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-this-in-production";
@@ -29,19 +31,27 @@ async function verifyMobileToken(token) {
 
 export async function GET(req, { params }) {
   try {
+    const { id } = await params;
+    let user = null;
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
+
+    if (authHeader?.startsWith("Bearer ")) {
+      const token = authHeader.substring(7);
+      user = await verifyMobileToken(token);
+    } else {
+      // Check for admin cookie session
+      const cookieStore = await cookies();
+      const adminToken = cookieStore.get('auth-token')?.value;
+      if (adminToken) {
+        user = await verifyToken(adminToken);
+      }
+    }
+
+    if (!user) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
 
-    const token = authHeader.substring(7);
-    const user = await verifyMobileToken(token);
-
-    if (!user) {
-      return NextResponse.json({ success: false, error: "Invalid token" }, { status: 401 });
-    }
-
-    const disputeId = parseInt(params.id);
+    const disputeId = parseInt(id);
 
     // Dispute details
     const [dispute] = await db

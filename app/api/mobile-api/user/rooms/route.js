@@ -6,11 +6,12 @@
 import { db } from "@/lib/db";
 import {
   apartmentRooms,
+  roomAccessories,
   apartmentOwnerships,
   rentSessions,
   apartments,
 } from "@/lib/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
@@ -142,11 +143,17 @@ export async function GET(request) {
       .where(eq(apartmentRooms.apartmentId, parseInt(apartmentId)))
       .orderBy(apartmentRooms.createdAt);
 
-    // Get accessories count for each room (if you have accessories table)
-    // For now, returning 0 as placeholder
-    const roomsWithAccessories = rooms.map(room => ({
-      ...room,
-      accessoriesCount: 0, // TODO: Fetch from roomAccessories table
+    // Get accessories count for each room
+    const roomsWithAccessories = await Promise.all(rooms.map(async (room) => {
+      const [accCount] = await db
+        .select({ count: sql`count(*)` })
+        .from(roomAccessories)
+        .where(eq(roomAccessories.roomId, room.id));
+
+      return {
+        ...room,
+        accessoriesCount: accCount.count,
+      };
     }));
 
     return NextResponse.json({

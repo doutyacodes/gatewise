@@ -4,10 +4,11 @@
 // ============================================
 
 import { db } from "@/lib/db";
-import { roomAccessories, apartmentRooms, rentSessions, apartmentOwnerships } from "@/lib/db/schema";
+import { roomAccessories, apartmentRooms, rentSessions, apartmentOwnerships, users } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/app/api/mobile-api/middleware/auth";
+import { sendFCMNotification } from "@/app/api/mobile-api/helpers/fcmHelper";
 
 // ============================================
 // PUT - Update Accessory
@@ -229,7 +230,24 @@ export async function POST(request, { params }) {
       })
       .where(eq(roomAccessories.id, accessoryId));
 
-    // TODO: Send notification to tenant
+    // Send notification to tenant
+    const [tenant] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, accessory.createdBy))
+      .limit(1);
+
+    if (tenant && tenant.fcmToken) {
+      await sendFCMNotification({
+        fcmToken: tenant.fcmToken,
+        title: `Accessory ${action === 'approve' ? 'Approved' : 'Rejected'}`,
+        body: `Your accessory request for ${accessory.accessoryName} has been ${action}d.`,
+        data: {
+          type: "accessory_approval",
+          accessoryId: accessoryId,
+        },
+      });
+    }
 
     return NextResponse.json({
       success: true,

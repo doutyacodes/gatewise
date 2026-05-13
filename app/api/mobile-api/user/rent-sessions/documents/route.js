@@ -29,13 +29,11 @@ export async function POST(request) {
 
     const userId = authResult.userId;
 
-    // Parse multipart form data
-    const formData = await request.formData();
-    const sessionId = formData.get("sessionId");
-    const documentType = formData.get("documentType");
-    const file = formData.get("file");
+    // Parse JSON data
+    const body = await request.json();
+    const { sessionId, documentType, documentFilename } = body;
 
-    if (!sessionId || !documentType || !file) {
+    if (!sessionId || !documentType || !documentFilename) {
       return NextResponse.json(
         { success: false, error: "Missing required fields" },
         { status: 400 }
@@ -64,14 +62,6 @@ export async function POST(request) {
       );
     }
 
-    // Upload file to storage (implement your file upload logic here)
-    // For now, we'll assume the file is uploaded and we get a filename
-    const filename = `rent_doc_${Date.now()}_${file.name}`;
-    
-    // TODO: Implement actual file upload to cloud storage
-    // const uploadResult = await uploadToCloudStorage(file);
-    // const filename = uploadResult.filename;
-
     // Determine approval status
     // If owner uploads, auto-approve
     // If tenant uploads, needs owner approval
@@ -83,7 +73,7 @@ export async function POST(request) {
       .values({
         sessionId: parseInt(sessionId),
         documentType,
-        documentFilename: filename,
+        documentFilename,
         uploadedBy: userId,
         approvalStatus,
         uploadedAt: new Date(),

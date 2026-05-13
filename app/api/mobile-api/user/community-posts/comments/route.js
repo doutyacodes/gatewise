@@ -6,10 +6,12 @@
 import { db } from "@/lib/db";
 import {
   communityPostComments,
+  communityPostCommentLikes,
   communityPosts,
   users,
   apartmentOwnerships,
   apartments,
+  userApartmentContext,
 } from "@/lib/db/schema";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -63,8 +65,8 @@ async function getCommentWithUserDetails(commentId) {
     })
     .from(communityPostComments)
     .innerJoin(users, eq(communityPostComments.userId, users.id))
-    .leftJoin(apartmentOwnerships, eq(users.id, apartmentOwnerships.userId))
-    .leftJoin(apartments, eq(apartmentOwnerships.apartmentId, apartments.id))
+    .leftJoin(userApartmentContext, eq(communityPostComments.userId, userApartmentContext.userId))
+    .leftJoin(apartments, eq(userApartmentContext.currentApartmentId, apartments.id))
     .where(eq(communityPostComments.id, commentId))
     .limit(1);
 
@@ -72,7 +74,7 @@ async function getCommentWithUserDetails(commentId) {
 }
 
 // Build nested comment tree
-async function buildCommentTree(postId) {
+async function buildCommentTree(postId, userId) {
   // Get all comments for this post
   const allComments = await db
     .select({
@@ -84,8 +86,8 @@ async function buildCommentTree(postId) {
     })
     .from(communityPostComments)
     .innerJoin(users, eq(communityPostComments.userId, users.id))
-    .leftJoin(apartmentOwnerships, eq(users.id, apartmentOwnerships.userId))
-    .leftJoin(apartments, eq(apartmentOwnerships.apartmentId, apartments.id))
+    .leftJoin(userApartmentContext, eq(communityPostComments.userId, userApartmentContext.userId))
+    .leftJoin(apartments, eq(userApartmentContext.currentApartmentId, apartments.id))
     .where(
       and(
         eq(communityPostComments.postId, postId),
@@ -102,11 +104,40 @@ async function buildCommentTree(postId) {
     (c) => c.comment.parentCommentId !== null
   );
 
+  // Helper to fetch likes for a comment
+  const getLikes = async (commentId) => {
+    const [likeCountResult] = await db
+      .select({ count: sql`count(*)` })
+      .from(communityPostCommentLikes)
+      .where(eq(communityPostCommentLikes.commentId, commentId));
+
+    let isLiked = false;
+    if (userId) {
+      const [userLikeResult] = await db
+        .select({ id: communityPostCommentLikes.id })
+        .from(communityPostCommentLikes)
+        .where(
+          and(
+            eq(communityPostCommentLikes.commentId, commentId),
+            eq(communityPostCommentLikes.userId, userId)
+          )
+        )
+        .limit(1);
+      isLiked = !!userLikeResult;
+    }
+    
+    return { count: likeCountResult.count, isLiked };
+  };
+
   // Build tree structure
-  const commentsTree = parentComments.map((parent) => {
-    const replies = replyComments
-      .filter((reply) => reply.comment.parentCommentId === parent.comment.id)
-      .map((reply) => ({
+  const commentsTree = await Promise.all(parentComments.map(async (parent) => {
+    const parentLikes = await getLikes(parent.comment.id);
+
+    const repliesList = replyComments.filter((reply) => reply.comment.parentCommentId === parent.comment.id);
+    
+    const replies = await Promise.all(repliesList.map(async (reply) => {
+      const replyLikes = await getLikes(reply.comment.id);
+      return {
         id: reply.comment.id,
         userId: reply.comment.userId,
         userName: reply.userName,
@@ -114,9 +145,10 @@ async function buildCommentTree(postId) {
         userApartment: `${reply.apartmentNumber}${reply.towerName ? `, ${reply.towerName}` : ""}`,
         commentText: reply.comment.commentText,
         createdAt: reply.comment.createdAt,
-        isLiked: false, // TODO: Implement likes
-        likeCount: 0, // TODO: Implement likes
-      }));
+        isLiked: replyLikes.isLiked,
+        likeCount: replyLikes.count,
+      };
+    }));
 
     return {
       id: parent.comment.id,
@@ -126,11 +158,11 @@ async function buildCommentTree(postId) {
       userApartment: `${parent.apartmentNumber}${parent.towerName ? `, ${parent.towerName}` : ""}`,
       commentText: parent.comment.commentText,
       createdAt: parent.comment.createdAt,
-      isLiked: false, // TODO: Implement likes
-      likeCount: 0, // TODO: Implement likes
+      isLiked: parentLikes.isLiked,
+      likeCount: parentLikes.count,
       replies,
     };
-  });
+  }));
 
   return commentsTree;
 }
@@ -183,7 +215,7 @@ export async function GET(request) {
     }
 
     // Build comment tree
-    const comments = await buildCommentTree(parseInt(postId));
+    const comments = await buildCommentTree(parseInt(postId), user.id);
 
     return NextResponse.json({
       success: true,

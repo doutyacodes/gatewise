@@ -4,10 +4,11 @@
 // ============================================
 
 import { db } from "@/lib/db";
-import { roomAccessories, apartmentRooms, rentSessions, apartmentOwnerships, apartments } from "@/lib/db/schema";
+import { roomAccessories, apartmentRooms, rentSessions, apartmentOwnerships, apartments, users } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/app/api/mobile-api/middleware/auth";
+import { sendFCMNotification } from "@/app/api/mobile-api/helpers/fcmHelper";
 
 // ============================================
 // GET - List Accessories for Room
@@ -163,6 +164,7 @@ export async function POST(request, { params }) {
       )
       .limit(1);
 
+    let activeSession = null;
     if (ownership.length > 0) {
       userRole = "owner";
       requiresApproval = false; // Owner doesn't need approval
@@ -182,6 +184,7 @@ export async function POST(request, { params }) {
       if (session) {
         userRole = "tenant";
         requiresApproval = true; // Tenant needs owner approval
+        activeSession = session;
       }
     }
 
@@ -208,7 +211,27 @@ export async function POST(request, { params }) {
       })
       .$returningId();
 
-    // TODO: Send notification if requires approval
+    // Send notification if requires approval
+    if (requiresApproval && activeSession) {
+      const [owner] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, activeSession.ownerId))
+        .limit(1);
+
+      if (owner && owner.fcmToken) {
+        await sendFCMNotification({
+          fcmToken: owner.fcmToken,
+          title: "New Accessory Request",
+          body: `The tenant has added an accessory (${accessoryName}) to a room that requires your approval.`,
+          data: {
+            type: "accessory_request",
+            roomId: roomId,
+            accessoryId: newAccessory.id,
+          },
+        });
+      }
+    }
 
     return NextResponse.json({
       success: true,

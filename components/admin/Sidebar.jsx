@@ -16,6 +16,7 @@ import {
   Home,
   ClipboardList,
   FileCheck,
+  MessageSquare,
 } from 'lucide-react';
 
 export default function Sidebar({ user, isOpen, onClose }) {
@@ -32,6 +33,8 @@ export default function Sidebar({ user, isOpen, onClose }) {
     { icon: LayoutDashboard, label: 'Dashboard', href: '/admin/dashboard' },
     { icon: Home, label: 'Apartments', href: '/admin/apartments' },
     { icon: FileCheck, label: 'Apartment Requests', href: '/admin/apartment-requests' },
+    { icon: ClipboardList, label: 'Rent Sessions', href: '/admin/rent-sessions' },
+    { icon: MessageSquare, label: 'Disputes', href: '/admin/disputes' },
     // { icon: Users, label: 'Residents', href: '/admin/residents' },
     // { icon: UserCheck, label: 'Visitors', href: '/admin/visitors' },
     { icon: Shield, label: 'Security', href: '/admin/security' },

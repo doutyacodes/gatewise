@@ -13,8 +13,9 @@ import {
   rentSessions,
   apartmentRooms,
   roomAccessories,
+  userApartmentContext,
 } from "@/lib/db/schema";
-import { eq, and, or } from "drizzle-orm";
+import { eq, and, or, sql } from "drizzle-orm";
 import { jwtVerify } from "jose";
 
 const encoder = new TextEncoder();
@@ -46,6 +47,21 @@ export async function GET(request) {
     }
 
     // Get user apartment context (current apartment)
+    const [context] = await db
+      .select({ currentApartmentId: userApartmentContext.currentApartmentId })
+      .from(userApartmentContext)
+      .where(eq(userApartmentContext.userId, user.id))
+      .limit(1);
+
+    const whereConditions = [
+      eq(apartmentOwnerships.userId, user.id),
+      eq(apartmentOwnerships.isAdminApproved, true)
+    ];
+
+    if (context?.currentApartmentId) {
+      whereConditions.push(eq(apartmentOwnerships.apartmentId, context.currentApartmentId));
+    }
+
     const [ownership] = await db
       .select({
         apartmentId: apartmentOwnerships.apartmentId,
@@ -60,9 +76,7 @@ export async function GET(request) {
       .from(apartmentOwnerships)
       .innerJoin(apartments, eq(apartmentOwnerships.apartmentId, apartments.id))
       .innerJoin(communities, eq(apartments.communityId, communities.id))
-      .where(
-        and(eq(apartmentOwnerships.userId, user.id), eq(apartmentOwnerships.isAdminApproved, true))
-      )
+      .where(and(...whereConditions))
       .limit(1);
 
     if (!ownership) {

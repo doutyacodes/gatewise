@@ -224,32 +224,59 @@ export async function sendFCMNotificationToTopic(options) {
 
     console.log(`📤 Sending FCM notification to topic: ${topic}`);
 
-    // TODO: Implement topic-based notification
-    // Example with Firebase Admin SDK:
-    /*
     const admin = require('firebase-admin');
+
+    // Initialize Firebase Admin (only once)
+    if (!admin.apps.length) {
+      if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+        admin.initializeApp({
+          credential: admin.credential.cert(serviceAccount),
+        });
+      } else {
+        admin.initializeApp({
+          credential: admin.credential.applicationDefault(),
+        });
+      }
+    }
+
+    const stringifiedData = {};
+    for (const [key, value] of Object.entries(data)) {
+      stringifiedData[key] = String(value);
+    }
 
     const message = {
       topic,
+      data: stringifiedData,
       notification: {
         title,
         body,
       },
-      data,
+      android: {
+        priority: 'high',
+        notification: {
+          channelId: 'default',
+          sound: 'default',
+          priority: 'high',
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1,
+            contentAvailable: true,
+          },
+        },
+      },
     };
 
     const response = await admin.messaging().send(message);
+    console.log(`✅ FCM topic message sent successfully! Message ID:`, response);
+
     return {
       success: true,
       messageId: response,
-    };
-    */
-
-    console.log('⚠️ Topic notification not implemented');
-
-    return {
-      success: true,
-      mock: true,
     };
 
   } catch (error) {

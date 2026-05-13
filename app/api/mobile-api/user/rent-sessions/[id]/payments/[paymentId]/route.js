@@ -4,10 +4,11 @@
 // ============================================
 
 import { db } from "@/lib/db";
-import { rentPayments, rentSessions } from "@/lib/db/schema";
+import { rentPayments, rentSessions, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/app/api/mobile-api/middleware/auth";
+import { sendFCMNotification } from "@/app/api/mobile-api/helpers/fcmHelper";
 
 // ============================================
 // PUT - Update Payment (Edit amount or dispute)
@@ -84,7 +85,25 @@ export async function PUT(request, { params }) {
         })
         .where(eq(rentPayments.id, paymentId));
 
-      // TODO: Send notification
+      // Send notification
+      const [loggerUser] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, payment.loggedBy))
+        .limit(1);
+
+      if (loggerUser && loggerUser.fcmToken) {
+        await sendFCMNotification({
+          fcmToken: loggerUser.fcmToken,
+          title: "Payment Disputed",
+          body: `Your payment entry of ${payment.paymentAmount} has been disputed. Reason: ${disputeReason || 'No reason provided'}`,
+          data: {
+            type: "payment_disputed",
+            sessionId: sessionId,
+            paymentId: paymentId,
+          },
+        });
+      }
 
       return NextResponse.json({
         success: true,
@@ -203,7 +222,25 @@ export async function POST(request, { params }) {
       })
       .where(eq(rentPayments.id, paymentId));
 
-    // TODO: Send notification
+    // Send notification
+    const [loggerUser] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, payment.loggedBy))
+      .limit(1);
+
+    if (loggerUser && loggerUser.fcmToken) {
+      await sendFCMNotification({
+        fcmToken: loggerUser.fcmToken,
+        title: "Payment Approved",
+        body: `Your payment entry of ${payment.paymentAmount} has been approved.`,
+        data: {
+          type: "payment_approved",
+          sessionId: sessionId,
+          paymentId: paymentId,
+        },
+      });
+    }
 
     return NextResponse.json({
       success: true,

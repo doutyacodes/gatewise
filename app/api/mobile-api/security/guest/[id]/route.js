@@ -141,3 +141,43 @@ export async function GET(request, { params }) {
     );
   }
 }
+
+export async function PUT(request, { params }) {
+  try {
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const token = authHeader.substring(7);
+    const security = await verifyMobileToken(token);
+
+    if (!security || security.type !== 'security') {
+      return NextResponse.json({ success: false, error: 'Invalid authentication' }, { status: 401 });
+    }
+
+    const { id } = await params;
+    const guestId = parseInt(id);
+    const body = await request.json();
+
+    if (body.status === 'approved') {
+      await db
+        .update(guests)
+        .set({ status: 'approved' })
+        .where(
+          and(
+            eq(guests.id, guestId),
+            eq(guests.communityId, security.communityId)
+          )
+        );
+
+      return NextResponse.json({ success: true, message: 'Guest entry granted manually' });
+    } else {
+      return NextResponse.json({ success: false, error: 'Invalid status update' }, { status: 400 });
+    }
+
+  } catch (error) {
+    console.error('Update guest error:', error);
+    return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
+  }
+}

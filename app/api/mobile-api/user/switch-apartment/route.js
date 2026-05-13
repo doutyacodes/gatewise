@@ -5,7 +5,7 @@
 
 import { db } from "@/lib/db";
 import { userApartmentContext, apartmentOwnerships, apartments } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { jwtVerify } from "jose";
 import { NextResponse } from "next/server";
 
@@ -41,7 +41,13 @@ export async function POST(request) {
     const [ownership] = await db
       .select()
       .from(apartmentOwnerships)
-      .where(eq(apartmentOwnerships.userId, user.id));
+      .where(
+        and(
+          eq(apartmentOwnerships.userId, user.id),
+          eq(apartmentOwnerships.apartmentId, apartmentId),
+          eq(apartmentOwnerships.isAdminApproved, true)
+        )
+      );
 
     if (!ownership)
       return NextResponse.json({ success: false, message: "Apartment not found or unauthorized" }, { status: 404 });

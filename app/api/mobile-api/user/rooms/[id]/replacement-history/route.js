@@ -10,10 +10,12 @@ import {
   roomAccessories,
   rentSessions,
   apartmentOwnerships,
+  users,
 } from "@/lib/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/app/api/mobile-api/middleware/auth";
+import { sendFCMNotification } from "@/app/api/mobile-api/helpers/fcmHelper";
 
 // ============================================
 // GET - List Replacement History for Room
@@ -198,7 +200,27 @@ export async function POST(request, { params }) {
       })
       .$returningId();
 
-    // TODO: Send notification if requires approval
+    // Send notification if requires approval
+    if (requiresApproval) {
+      const [owner] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, session.ownerId))
+        .limit(1);
+
+      if (owner && owner.fcmToken) {
+        await sendFCMNotification({
+          fcmToken: owner.fcmToken,
+          title: "Accessory Replacement Request",
+          body: `The tenant has requested an accessory replacement (${newAccessoryName}) that requires your approval.`,
+          data: {
+            type: "accessory_replacement_request",
+            roomId: roomId,
+            replacementId: newReplacement.id,
+          },
+        });
+      }
+    }
 
     return NextResponse.json({
       success: true,

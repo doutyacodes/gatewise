@@ -6,14 +6,20 @@
 import { db } from "@/lib/db";
 import {
     apartmentOwnerships,
+    apartments,
     rentSessionAdditionalCharges,
+    rentSessionDocuments,
     rentSessions,
+    rentPayments,
     tenantPreferences,
+    adminTenantQuestions,
+    tenantQuestionResponses,
     users
 } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import { jwtVerify } from "jose";
 import { NextResponse } from "next/server";
+import { sendFCMNotification } from "../../helpers/fcmHelper";
 
 const encoder = new TextEncoder();
 const JWT_SECRET =
@@ -195,7 +201,7 @@ export async function POST(request) {
         startDate: new Date(startDate),
         endDate: endDate ? new Date(endDate) : null,
         durationMonths: parseInt(durationMonths),
-        status: "active",
+        status: "pending_tenant_approval",
         createdAt: new Date(),
         updatedAt: new Date(),
       })
@@ -225,7 +231,7 @@ export async function POST(request) {
       updatedAt: new Date(),
     });
 
-    // TODO: Create apartment ownership for tenant
+    // Create apartment ownership for tenant
     // Check if tenant already has ownership entry
     const [existingOwnership] = await db
       .select()
@@ -249,7 +255,19 @@ export async function POST(request) {
       });
     }
 
-    // Send notification to tenant (TODO: Implement push notification)
+    // Send notification to tenant
+    if (tenant.fcmToken) {
+      await sendFCMNotification({
+        fcmToken: tenant.fcmToken,
+        title: "New Rent Session",
+        body: "A new rent session has been created for you. Please review and approve it.",
+        data: {
+          type: "rent_session",
+          sessionId: sessionId,
+          apartmentId: apartmentId
+        }
+      });
+    }
 
     return NextResponse.json({
       success: true,
@@ -268,6 +286,72 @@ export async function POST(request) {
       { status: 500 }
     );
   }
+}
+
+// Helper to hydrate session data with related entities
+async function hydrateSession(sessionObj) {
+  // 1. Fetch Apartment Info
+  const [apt] = await db
+    .select({
+      towerName: apartments.towerName,
+      apartmentNumber: apartments.apartmentNumber
+    })
+    .from(apartments)
+    .where(eq(apartments.id, sessionObj.apartmentId))
+    .limit(1);
+
+  // 2. Fetch Users Info
+  const [owner] = await db.select({ name: users.name }).from(users).where(eq(users.id, sessionObj.ownerId)).limit(1);
+  const [tenant] = await db.select({ name: users.name }).from(users).where(eq(users.id, sessionObj.tenantId)).limit(1);
+
+  // 3. Fetch Tenant Preferences
+  const [prefs] = await db
+    .select()
+    .from(tenantPreferences)
+    .where(eq(tenantPreferences.sessionId, sessionObj.id))
+    .limit(1);
+
+  // 4. Fetch Documents
+  const docs = await db
+    .select()
+    .from(rentSessionDocuments)
+    .where(eq(rentSessionDocuments.sessionId, sessionObj.id));
+
+  // 5. Fetch Additional Charges
+  const charges = await db
+    .select()
+    .from(rentSessionAdditionalCharges)
+    .where(eq(rentSessionAdditionalCharges.sessionId, sessionObj.id));
+
+  // 6. Fetch Payments
+  const paymentsList = await db
+    .select()
+    .from(rentPayments)
+    .where(eq(rentPayments.sessionId, sessionObj.id));
+
+  // 7. Fetch Tenant Questions
+  const questions = await db
+    .select({
+      id: tenantQuestionResponses.id,
+      questionText: adminTenantQuestions.questionText,
+      responseText: tenantQuestionResponses.responseText
+    })
+    .from(tenantQuestionResponses)
+    .innerJoin(adminTenantQuestions, eq(tenantQuestionResponses.questionId, adminTenantQuestions.id))
+    .where(eq(tenantQuestionResponses.sessionId, sessionObj.id));
+
+  return {
+    ...sessionObj,
+    towerName: apt?.towerName,
+    apartmentNumber: apt?.apartmentNumber,
+    ownerName: owner?.name,
+    tenantName: tenant?.name,
+    tenantPreferences: prefs || null,
+    documents: docs || [],
+    additionalCharges: charges || [],
+    payments: paymentsList || [],
+    tenantQuestions: questions || [],
+  };
 }
 
 // ============================================
@@ -321,17 +405,15 @@ export async function GET(request) {
       }
 
       // Get sessions for this apartment
-      const sessions = await db
-        .select({
-          session: rentSessions,
-          ownerName: users.name,
-          tenantName: users.name,
-        })
+      const rawSessions = await db
+        .select()
         .from(rentSessions)
-        .leftJoin(users, eq(rentSessions.ownerId, users.id))
-        .leftJoin(users, eq(rentSessions.tenantId, users.id))
         .where(eq(rentSessions.apartmentId, parseInt(apartmentId)))
         .orderBy(rentSessions.createdAt);
+
+      const sessions = await Promise.all(
+        rawSessions.map(session => hydrateSession(session))
+      );
 
       return NextResponse.json({
         success: true,
@@ -341,15 +423,23 @@ export async function GET(request) {
     }
 
     // Otherwise, get all sessions where user is owner or tenant
-    const ownerSessions = await db
+    const rawOwnerSessions = await db
       .select()
       .from(rentSessions)
       .where(eq(rentSessions.ownerId, userId));
 
-    const tenantSessions = await db
+    const rawTenantSessions = await db
       .select()
       .from(rentSessions)
       .where(eq(rentSessions.tenantId, userId));
+
+    // Hydrate all sessions with nested details
+    const ownerSessions = await Promise.all(
+      rawOwnerSessions.map(session => hydrateSession(session))
+    );
+    const tenantSessions = await Promise.all(
+      rawTenantSessions.map(session => hydrateSession(session))
+    );
 
     return NextResponse.json({
       success: true,

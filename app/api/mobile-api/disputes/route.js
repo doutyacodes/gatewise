@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import {
   disputeReports,
+  disputeChatMessages,
   apartmentOwnerships,
   rentSessions,
   apartmentRooms,
@@ -200,10 +201,22 @@ export async function GET(req) {
       `📊 Found ${disputes.length} disputes for session ${apartmentInfo.activeSession.id}`
     );
 
-    // Add unread count (placeholder)
-    const disputesWithUnread = disputes.map((dispute) => ({
-      ...dispute,
-      unreadCount: 0, // TODO: Implement from disputeChatMessages
+    // Add unread count
+    const disputesWithUnread = await Promise.all(disputes.map(async (dispute) => {
+      const [unreadResult] = await db
+        .select({ count: sql`count(*)` })
+        .from(disputeChatMessages)
+        .where(
+          and(
+            eq(disputeChatMessages.disputeId, dispute.id),
+            sql`${disputeChatMessages.senderId} != ${user.id}`
+          )
+        );
+
+      return {
+        ...dispute,
+        unreadCount: unreadResult.count,
+      };
     }));
 
     return NextResponse.json({

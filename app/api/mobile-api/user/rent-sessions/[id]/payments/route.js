@@ -8,6 +8,7 @@ import { rentPayments, rentSessions, users } from "@/lib/db/schema";
 import { eq, desc, and } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/app/api/mobile-api/middleware/auth";
+import { sendFCMNotification } from "@/app/api/mobile-api/helpers/fcmHelper";
 
 // ============================================
 // GET - List Payments for Session
@@ -180,7 +181,26 @@ export async function POST(request, { params }) {
       })
       .$returningId();
 
-    // TODO: Send notification to the other party
+    // Send notification to the other party
+    const targetUserId = loggedByRole === "owner" ? session.tenantId : session.ownerId;
+    const [targetUser] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, targetUserId))
+      .limit(1);
+
+    if (targetUser && targetUser.fcmToken) {
+      await sendFCMNotification({
+        fcmToken: targetUser.fcmToken,
+        title: "New Rent Payment Logged",
+        body: `A rent payment of ${paymentAmount} has been logged by the ${loggedByRole}.`,
+        data: {
+          type: "rent_payment",
+          sessionId: sessionId,
+          paymentId: newPayment.id,
+        },
+      });
+    }
 
     return NextResponse.json({
       success: true,

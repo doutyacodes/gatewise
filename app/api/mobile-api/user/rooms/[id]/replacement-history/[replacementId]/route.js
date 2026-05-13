@@ -4,10 +4,11 @@
 // ============================================
 
 import { db } from "@/lib/db";
-import { accessoryReplacementHistory, rentSessions } from "@/lib/db/schema";
+import { accessoryReplacementHistory, rentSessions, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/app/api/mobile-api/middleware/auth";
+import { sendFCMNotification } from "@/app/api/mobile-api/helpers/fcmHelper";
 
 // ============================================
 // PUT - Update Replacement
@@ -233,7 +234,24 @@ export async function POST(request, { params }) {
       })
       .where(eq(accessoryReplacementHistory.id, replacementId));
 
-    // TODO: Send notification to tenant
+    // Send notification to tenant
+    const [tenant] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, replacement.replacedBy))
+      .limit(1);
+
+    if (tenant && tenant.fcmToken) {
+      await sendFCMNotification({
+        fcmToken: tenant.fcmToken,
+        title: `Replacement Request ${action === 'approve' ? 'Approved' : 'Rejected'}`,
+        body: `Your accessory replacement request for ${replacement.newAccessoryName} has been ${action}d.`,
+        data: {
+          type: "accessory_replacement_approval",
+          replacementId: replacementId,
+        },
+      });
+    }
 
     return NextResponse.json({
       success: true,

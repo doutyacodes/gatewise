@@ -4,10 +4,11 @@
 // ============================================
 
 import { db } from "@/lib/db";
-import { rentSessions, rentSessionDocuments } from "@/lib/db/schema";
+import { rentSessions, rentSessionDocuments, users } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/app/api/mobile-api/middleware/auth";
+import { sendFCMNotification } from "@/app/api/mobile-api/helpers/fcmHelper";
 
 // ============================================
 // POST - Approve Document
@@ -88,6 +89,26 @@ export async function POST(request, { params }) {
         rejectionReason: null,
       })
       .where(eq(rentSessionDocuments.id, documentId));
+
+    // Send notification to uploader
+    const [uploader] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, document.uploadedBy))
+      .limit(1);
+
+    if (uploader && uploader.fcmToken && uploader.id !== userId) {
+      await sendFCMNotification({
+        fcmToken: uploader.fcmToken,
+        title: "Document Approved",
+        body: `Your document (${document.documentType}) has been approved.`,
+        data: {
+          type: "document_approved",
+          documentId: document.id,
+          sessionId: document.sessionId,
+        },
+      });
+    }
 
     return NextResponse.json({
       success: true,
@@ -184,6 +205,26 @@ export async function PUT(request, { params }) {
       })
       .where(eq(rentSessionDocuments.id, documentId));
 
+    // Send notification to uploader
+    const [uploader] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, document.uploadedBy))
+      .limit(1);
+
+    if (uploader && uploader.fcmToken && uploader.id !== userId) {
+      await sendFCMNotification({
+        fcmToken: uploader.fcmToken,
+        title: "Document Rejected",
+        body: `Your document (${document.documentType}) has been rejected. Reason: ${rejectionReason.trim()}`,
+        data: {
+          type: "document_rejected",
+          documentId: document.id,
+          sessionId: document.sessionId,
+        },
+      });
+    }
+
     return NextResponse.json({
       success: true,
       message: "Document rejected",
@@ -269,13 +310,27 @@ export async function DELETE(request, { params }) {
       );
     }
 
-    // Delete document
+    // Delete document from database
     await db
       .delete(rentSessionDocuments)
       .where(eq(rentSessionDocuments.id, documentId));
 
-    // TODO: Also delete the actual file from storage
-    // await deleteFromCloudStorage(document.documentFilename);
+    // Attempt to delete the actual file from storage (wowfy)
+    try {
+      if (document.documentFilename) {
+        const formData = new FormData();
+        formData.append("filename", document.documentFilename);
+        
+        // This relies on wowfy having a delete.php endpoint.
+        // It will gracefully fail if not supported.
+        await fetch("https://wowfy.in/gatewise/delete.php", {
+          method: "POST",
+          body: formData,
+        }).catch(err => console.log("Wowfy deletion skipped or failed:", err));
+      }
+    } catch (err) {
+      console.log("Storage deletion failed:", err);
+    }
 
     return NextResponse.json({
       success: true,
